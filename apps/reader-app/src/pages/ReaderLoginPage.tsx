@@ -184,13 +184,19 @@ export const ReaderLoginPage: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+        <div style={{ textAlign: 'center', marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <button
             onClick={() => navigate('/store')}
             style={{ background: 'none', border: 'none', color: '#60a5fa', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
           >
             Ver Catálogo de Jornais Disponíveis ↗
           </button>
+          <a
+            href="/admin"
+            style={{ background: 'none', border: 'none', color: '#a78bfa', fontSize: '13px', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}
+          >
+            Acesso ao Painel Administrativo ↗
+          </a>
         </div>
       </div>
     </div>
