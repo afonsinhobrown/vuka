@@ -1,5 +1,5 @@
 {
-  "name": "@vuka/reader-app",
+  "name": "vuka-reader-app",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@vuka/shared": "file:../../packages/shared",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

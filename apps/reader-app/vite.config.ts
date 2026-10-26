@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@vuka/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts')
+      '@vuka/shared': path.resolve(__dirname, './src/shared/index.ts')
     }
   },
   server: {

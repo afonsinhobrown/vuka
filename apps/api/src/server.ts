@@ -59,12 +59,14 @@ app.use('/api/v1/admin/reports', reportRoutes);
 // Error Middleware (Standard RFC format for VUKA)
 app.use(errorMiddleware);
 
-app.listen(PORT, () => {
-  console.log(`=========================================`);
-  console.log(`🚀 VUKA Core API rodando na porta ${PORT}`);
-  console.log(`📍 Endpoint base: http://localhost:${PORT}/api/v1`);
-  console.log(`🟢 Base de Dados: PostgreSQL (Neon Cloud)`);
-  console.log(`=========================================`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`=========================================`);
+    console.log(`🚀 VUKA Core API rodando na porta ${PORT}`);
+    console.log(`📍 Endpoint base: http://localhost:${PORT}/api/v1`);
+    console.log(`🟢 Base de Dados: PostgreSQL (Neon Cloud)`);
+    console.log(`=========================================`);
+  });
+}
 
 export default app;
