@@ -35,7 +35,7 @@ export class WhatsAppService {
       });
 
       let reply = `📰 *BEM-VINDO À VUKA* 📰\nA sua banca digital de jornais e revistas em Moçambique.\n\nEscolha a publicação que deseja ler:\n\n`;
-      publications.forEach((pub, index) => {
+      publications.forEach((pub: any, index: number) => {
         reply += `*${index + 1}* - ${pub.title} (${pub.publisher.name})\n`;
       });
       reply += `\n_Responda com o número correspondente (ex: 1)_`;
@@ -79,7 +79,7 @@ export class WhatsAppService {
       conversationSessions.set(cleanPhone, state);
 
       let reply = `🗞️ *${selectedPub.title}*\nEscolha a sua opção de leitura:\n\n`;
-      offers.forEach((offer, index) => {
+      offers.forEach((offer: any, index: number) => {
         const priceFormatted = formatMoney(offer.priceMinorUnits, offer.currency);
         const typeLabel = offer.type === 'SINGLE_EDITION' ? 'Edição Avulsa' : 'Assinatura';
         reply += `*${index + 1}* - ${offer.title} (${typeLabel}): *${priceFormatted}*\n`;

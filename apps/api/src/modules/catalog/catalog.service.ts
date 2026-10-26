@@ -44,7 +44,7 @@ export class CatalogService {
       orderBy: { title: 'asc' }
     });
 
-    return publications.map((p) => ({
+    return publications.map((p: { id: string; publisherId: string; publisher: { name: string }; publisherName: string; title: string; slug: string; description: string; coverAssetId: string | null; coverUrl: string | null; status: string; editions: any[]; latestEditions: any[]; offers: any[] }) => ({
       id: p.id,
       publisherId: p.publisherId,
       publisherName: p.publisher.name,
@@ -54,7 +54,7 @@ export class CatalogService {
       coverAssetId: p.coverAssetId,
       coverUrl: p.coverAssetId ? `/api/v1/assets/${p.coverAssetId}` : null,
       status: p.status,
-      latestEditions: p.editions.map((e) => ({
+      latestEditions: p.editions.map((e: any) => ({
         id: e.id,
         title: e.title,
         editionDate: e.editionDate.toISOString().split('T')[0],
@@ -104,7 +104,7 @@ export class CatalogService {
       coverAssetId: publication.coverAssetId,
       coverUrl: publication.coverAssetId ? `/api/v1/assets/${publication.coverAssetId}` : null,
       status: publication.status,
-      editions: publication.editions.map((e) => ({
+      editions: publication.editions.map((e: any) => ({
         id: e.id,
         publicationId: e.publicationId,
         title: e.title,

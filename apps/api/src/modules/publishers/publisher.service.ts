@@ -22,7 +22,7 @@ export class PublisherService {
       }
     });
 
-    return publishers.map((p) => ({
+    return publishers.map((p: any) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
@@ -150,7 +150,7 @@ export class PublisherService {
       }
     });
 
-    return members.map((m) => ({
+    return members.map((m: any) => ({
       id: m.id,
       userId: m.userId,
       user: m.user,

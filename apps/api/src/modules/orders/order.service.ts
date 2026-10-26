@@ -142,7 +142,7 @@ export class OrderService {
     ]);
 
     return {
-      orders: orders.map((o) => this.formatOrder(o)),
+      orders: orders.map((o: any) => this.formatOrder(o)),
       total
     };
   }

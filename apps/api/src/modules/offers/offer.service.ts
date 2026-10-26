@@ -23,7 +23,7 @@ export class OfferService {
       }
     });
 
-    return offers.map((o) => ({
+    return offers.map((o: any) => ({
       id: o.id,
       publisherId: o.publisherId,
       publisherName: o.publisher?.name || null,

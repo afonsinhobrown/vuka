@@ -132,7 +132,7 @@ export class PaymentService {
     }
 
     // 4. Transação Atômica de Atualização e Concessão de Direitos
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: { [key: string]: any }) => {
       // 4.1 Registar ou atualizar WebhookEvent
       await tx.webhookEvent.upsert({
         where: {
@@ -307,7 +307,7 @@ export class PaymentService {
 
     if (!order) throw new AppError('Pedido não encontrado.', 404, 'ORDER_NOT_FOUND');
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: { [key: string]: any }) => {
       const o = await tx.order.update({
         where: { id: data.orderId },
         data: {
