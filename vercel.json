@@ -1,27 +1,34 @@
 {
   "services": {
-    "api": {
-      "root": "apps/api"
-    },
     "admin-web": {
       "root": "apps/admin-web"
     },
     "reader-app": {
       "root": "apps/reader-app"
+    },
+    "api": {
+      "root": "apps/api",
+      "entrypoint": "src/server.ts"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/services/api/api/$1"
+      "destination": {
+        "service": "api"
+      }
     },
     {
       "source": "/admin/(.*)",
-      "destination": "/services/admin-web/$1"
+      "destination": {
+        "service": "admin-web"
+      }
     },
     {
       "source": "/(.*)",
-      "destination": "/services/reader-app/$1"
+      "destination": {
+        "service": "reader-app"
+      }
     }
   ]
 }
