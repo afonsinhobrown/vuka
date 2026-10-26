@@ -1,0 +1,27 @@
+{
+  "services": {
+    "api": {
+      "root": "apps/api"
+    },
+    "admin-web": {
+      "root": "apps/admin-web"
+    },
+    "reader-app": {
+      "root": "apps/reader-app"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/services/api/api/$1"
+    },
+    {
+      "source": "/admin/(.*)",
+      "destination": "/services/admin-web/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/services/reader-app/$1"
+    }
+  ]
+}
