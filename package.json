@@ -1,0 +1,27 @@
+{
+  "name": "vuka-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VUKA - Plataforma multi-editora de publicações digitais com venda via WhatsApp e leitura na app",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace=apps/api run dev",
+    "dev:admin": "npm --workspace=apps/admin-web run dev",
+    "dev:reader": "npm --workspace=apps/reader-app run dev",
+    "dev": "npm --workspace=apps/api run dev",
+    "build": "npm run build --workspaces --if-present",
+    "seed": "npm --workspace=apps/api run db:seed"
+  },
+  "keywords": [
+    "vuka",
+    "digital-publishing",
+    "whatsapp-sales",
+    "digital-reader",
+    "entitlements"
+  ],
+  "author": "VUKA Team",
+  "license": "UNLICENSED"
+}

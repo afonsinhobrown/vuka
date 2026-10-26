@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+scratch/
+apps/api/storage/private/*
+!apps/api/storage/private/.gitkeep
+apps/api/storage/public/*
+!apps/api/storage/public/.gitkeep

@@ -1,0 +1,309 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMIN
+  PUBLISHER_ADMIN
+  PUBLISHER_EDITOR
+  SUPPORT
+  READER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PublisherStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum PublicationStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum EditionStatus {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+}
+
+enum OfferType {
+  SINGLE_EDITION
+  SUBSCRIPTION
+  BUNDLE
+}
+
+enum OfferStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  CONFIRMED
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  MPESA
+  EMOLA
+  CREDIT_CARD
+  MOCK_SANDBOX
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  REFUNDED
+}
+
+enum AssetVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model User {
+  id           String      @id @default(uuid())
+  displayName  String?
+  phone        String?     @unique
+  email        String?     @unique
+  passwordHash String?
+  role         UserRole    @default(READER)
+  status       UserStatus  @default(ACTIVE)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  publisherMembers PublisherMember[]
+  orders           Order[]
+  entitlements     Entitlement[]
+  auditEvents      AuditEvent[]
+
+  @@map("users")
+}
+
+model Publisher {
+  id           String          @id @default(uuid())
+  name         String
+  slug         String          @unique
+  contactEmail String?
+  contactPhone String?
+  status       PublisherStatus @default(ACTIVE)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  members      PublisherMember[]
+  publications Publication[]
+  offers       Offer[]
+  auditEvents  AuditEvent[]
+
+  @@map("publishers")
+}
+
+model PublisherMember {
+  id          String    @id @default(uuid())
+  publisherId String
+  userId      String
+  role        UserRole  @default(PUBLISHER_EDITOR)
+  createdAt   DateTime  @default(now())
+
+  publisher Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([publisherId, userId])
+  @@map("publisher_members")
+}
+
+model Publication {
+  id           String            @id @default(uuid())
+  publisherId  String
+  title        String
+  slug         String
+  description  String?
+  coverAssetId String?
+  status       PublicationStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  publisher Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  editions  Edition[]
+  offers    Offer[]
+
+  @@unique([publisherId, slug])
+  @@map("publications")
+}
+
+model Edition {
+  id             String        @id @default(uuid())
+  publicationId  String
+  title          String
+  editionDate    DateTime
+  contentAssetId String
+  coverAssetId   String?
+  status         EditionStatus @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  publication  Publication   @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  entitlements Entitlement[]
+  offers       Offer[]
+
+  @@map("editions")
+}
+
+model Asset {
+  id           String          @id @default(uuid())
+  storageKey   String
+  mimeType     String
+  sizeBytes    Int
+  visibility   AssetVisibility @default(PRIVATE)
+  checksum     String?
+  originalName String?
+  createdAt    DateTime        @default(now())
+
+  @@map("assets")
+}
+
+model Offer {
+  id               String      @id @default(uuid())
+  publisherId      String?
+  publicationId    String?
+  editionId        String?
+  type             OfferType   @default(SINGLE_EDITION)
+  title            String
+  description      String?
+  priceMinorUnits  Int         // Ex: 10000 = 100.00 MZN
+  currency         String      @default("MZN")
+  validityDays     Int?        // Nullable para compra permanente de edição
+  status           OfferStatus @default(ACTIVE)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  publisher   Publisher?   @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  publication Publication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  edition     Edition?     @relation(fields: [editionId], references: [id], onDelete: SetNull)
+  orders      Order[]
+
+  @@map("offers")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  publicReference String      @unique // Ex: VUKA-A7K29X
+  userId          String?
+  offerId         String
+  buyerContact    String
+  buyerName       String?
+  channel         String      @default("whatsapp")
+  status          OrderStatus @default(PENDING_PAYMENT)
+  currency        String      @default("MZN")
+  totalMinorUnits Int
+  offerSnapshot   Json
+  idempotencyKey  String?     @unique
+  expiresAt       DateTime
+  paidAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  offer        Offer         @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  payments     Payment[]
+  entitlements Entitlement[]
+
+  @@map("orders")
+}
+
+model Payment {
+  id               String          @id @default(uuid())
+  orderId          String
+  provider         PaymentProvider @default(MOCK_SANDBOX)
+  providerReference String?
+  status           PaymentStatus   @default(PENDING)
+  amountMinorUnits Int
+  currency         String          @default("MZN")
+  idempotencyKey   String          @unique
+  providerPayload  Json?
+  confirmedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Entitlement {
+  id            String            @id @default(uuid())
+  userId        String
+  orderId       String?
+  editionId     String?
+  publicationId String?
+  startsAt      DateTime          @default(now())
+  endsAt        DateTime?         // Null = Permanente
+  status        EntitlementStatus @default(ACTIVE)
+  origin        String            @default("ORDER") // ORDER, MANUAL_ADMIN, SUBSCRIPTION
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  edition Edition? @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@map("entitlements")
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  publisherId String?
+  action      String
+  entityType  String
+  entityId    String
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  actor     User?      @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  publisher Publisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+
+  @@map("audit_events")
+}
+
+model WebhookEvent {
+  id               String    @id @default(uuid())
+  provider         String
+  externalEventId  String
+  processingStatus String    // PENDING, PROCESSED, FAILED
+  payload          Json
+  errorCode        String?
+  processedAt      DateTime?
+  receivedAt       DateTime  @default(now())
+
+  @@unique([provider, externalEventId])
+  @@map("webhook_events")
+}
