@@ -1,0 +1,92 @@
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  PUBLISHER_ADMIN = 'PUBLISHER_ADMIN',
+  PUBLISHER_EDITOR = 'PUBLISHER_EDITOR',
+  SUPPORT = 'SUPPORT',
+  READER = 'READER'
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED'
+}
+
+export enum PublisherStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED'
+}
+
+export enum PublicationStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  ARCHIVED = 'ARCHIVED'
+}
+
+export enum EditionStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  WITHDRAWN = 'WITHDRAWN'
+}
+
+export enum OfferType {
+  SINGLE_EDITION = 'SINGLE_EDITION',
+  SUBSCRIPTION = 'SUBSCRIPTION',
+  BUNDLE = 'BUNDLE'
+}
+
+export enum OfferStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  ARCHIVED = 'ARCHIVED'
+}
+
+export enum OrderStatus {
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+  REFUNDED = 'REFUNDED'
+}
+
+export enum PaymentStatus {
+  CREATED = 'CREATED',
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+  REFUNDED = 'REFUNDED'
+}
+
+export enum PaymentProvider {
+  MPESA = 'MPESA',
+  EMOLA = 'EMOLA',
+  CREDIT_CARD = 'CREDIT_CARD',
+  MOCK_SANDBOX = 'MOCK_SANDBOX'
+}
+
+export enum EntitlementStatus {
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  REVOKED = 'REVOKED',
+  REFUNDED = 'REFUNDED'
+}
+
+export enum AssetVisibility {
+  PUBLIC = 'PUBLIC',
+  PRIVATE = 'PRIVATE'
+}
+
+export enum AuditEventAction {
+  CREATE = 'CREATE',
+  UPDATE = 'UPDATE',
+  DELETE = 'DELETE',
+  PUBLISH = 'PUBLISH',
+  WITHDRAW = 'WITHDRAW',
+  PRICE_CHANGE = 'PRICE_CHANGE',
+  MANUAL_PAYMENT_OVERRIDE = 'MANUAL_PAYMENT_OVERRIDE',
+  GRANT_ENTITLEMENT = 'GRANT_ENTITLEMENT',
+  REVOKE_ENTITLEMENT = 'REVOKE_ENTITLEMENT',
+  AUTH_CHANGE = 'AUTH_CHANGE'
+}
