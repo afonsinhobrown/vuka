@@ -12,6 +12,7 @@
     "dev:admin": "npm --workspace=apps/admin-web run dev",
     "dev:reader": "npm --workspace=apps/reader-app run dev",
     "dev": "npm --workspace=apps/api run dev",
+    "postinstall": "npm run build --workspace=packages/shared",
     "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/admin-web && npm run build --workspace=apps/reader-app",
     "seed": "npm --workspace=apps/api run db:seed"
   },
