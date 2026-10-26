@@ -12,14 +12,18 @@ import { AuditService } from '../audit/audit.service';
 import fs from 'fs';
 import path from 'path';
 
-const STORAGE_DIR = process.env.STORAGE_DIR || './storage';
+const STORAGE_DIR = process.env.STORAGE_DIR || '/tmp/storage';
 
 // Ensure storage subfolders exist
-if (!fs.existsSync(path.join(STORAGE_DIR, 'public'))) {
-  fs.mkdirSync(path.join(STORAGE_DIR, 'public'), { recursive: true });
-}
-if (!fs.existsSync(path.join(STORAGE_DIR, 'private'))) {
-  fs.mkdirSync(path.join(STORAGE_DIR, 'private'), { recursive: true });
+try {
+  if (!fs.existsSync(path.join(STORAGE_DIR, 'public'))) {
+    fs.mkdirSync(path.join(STORAGE_DIR, 'public'), { recursive: true });
+  }
+  if (!fs.existsSync(path.join(STORAGE_DIR, 'private'))) {
+    fs.mkdirSync(path.join(STORAGE_DIR, 'private'), { recursive: true });
+  }
+} catch (e) {
+  // Ignore errors in serverless environments
 }
 
 export class CatalogService {
