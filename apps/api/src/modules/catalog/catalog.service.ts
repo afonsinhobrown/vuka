@@ -44,7 +44,7 @@ export class CatalogService {
       orderBy: { title: 'asc' }
     });
 
-    return publications.map((p: { id: string; publisherId: string; publisher: { name: string }; publisherName: string; title: string; slug: string; description: string; coverAssetId: string | null; coverUrl: string | null; status: string; editions: any[]; latestEditions: any[]; offers: any[] }) => ({
+    return publications.map((p: any) => ({
       id: p.id,
       publisherId: p.publisherId,
       publisherName: p.publisher.name,
@@ -60,7 +60,7 @@ export class CatalogService {
         editionDate: e.editionDate.toISOString().split('T')[0],
         coverUrl: e.coverAssetId ? `/api/v1/assets/${e.coverAssetId}` : null
       })),
-      offers: p.offers.map((o) => ({
+      offers: p.offers.map((o: any) => ({
         id: o.id,
         type: o.type,
         title: o.title,
