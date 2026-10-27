@@ -19,15 +19,38 @@
       }
     },
     {
+      "source": "/admin/assets/(.*)",
+      "destination": {
+        "service": "admin-web",
+        "path": "/assets/$1"
+      }
+    },
+    {
+      "source": "/admin",
+      "destination": {
+        "service": "admin-web",
+        "path": "/index.html"
+      }
+    },
+    {
       "source": "/admin/(.*)",
       "destination": {
-        "service": "admin-web"
+        "service": "admin-web",
+        "path": "/index.html"
+      }
+    },
+    {
+      "source": "/assets/(.*)",
+      "destination": {
+        "service": "reader-app",
+        "path": "/assets/$1"
       }
     },
     {
       "source": "/(.*)",
       "destination": {
-        "service": "reader-app"
+        "service": "reader-app",
+        "path": "/index.html"
       }
     }
   ]
