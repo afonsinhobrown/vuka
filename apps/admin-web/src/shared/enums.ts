@@ -63,6 +63,7 @@ export enum PaymentProvider {
   MPESA = 'MPESA',
   EMOLA = 'EMOLA',
   CREDIT_CARD = 'CREDIT_CARD',
+  PAYSUITE = 'PAYSUITE',
   MOCK_SANDBOX = 'MOCK_SANDBOX'
 }
 
