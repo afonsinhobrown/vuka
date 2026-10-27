@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { AdminLayout } from './components/AdminLayout';
@@ -22,7 +22,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <HashRouter>
+      <BrowserRouter basename="/admin">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
@@ -45,7 +45,7 @@ export const App: React.FC = () => {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </AuthProvider>
   );
 };

@@ -19,12 +19,6 @@
       }
     },
     {
-      "source": "/admin",
-      "destination": {
-        "service": "admin-web"
-      }
-    },
-    {
       "source": "/admin/(.*)",
       "destination": {
         "service": "admin-web"
