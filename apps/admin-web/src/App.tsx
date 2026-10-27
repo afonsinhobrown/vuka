@@ -22,7 +22,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/admin">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
