@@ -8,8 +8,13 @@ const router = Router();
 // Iniciar pagamento
 router.post('/initiate', PaymentController.initiate);
 
-// Webhook endpoint para fornecedores (M-Pesa, E-Mola, Mock Sandbox)
-// Suporta /api/v1/payments/webhooks/:provider e /api/v1/webhooks/payments/:provider
+// Iniciar pagamento via PaySuite (M-Pesa, E-Mola, Cartões)
+router.post('/paysuite/initiate', PaymentController.initiatePaySuite);
+
+// Webhook endpoint oficial do PaySuite
+router.post('/webhook/paysuite', PaymentController.handlePaySuiteWebhook);
+
+// Webhook endpoint genérico para fornecedores (M-Pesa, E-Mola, Mock Sandbox)
 router.post('/webhooks/:provider', PaymentController.handleWebhook);
 
 // Correção manual de pagamentos (Apenas Administrador e Apoio com auditoria)

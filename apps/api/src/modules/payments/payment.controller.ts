@@ -24,6 +24,39 @@ export class PaymentController {
     }
   }
 
+  static async initiatePaySuite(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { orderId, method, phoneNumber } = req.body;
+      const { PaySuiteService } = await import('./paysuite.service');
+      const result = await PaySuiteService.createPayment({
+        orderId,
+        method,
+        phoneNumber
+      });
+
+      return res.status(201).json({ payment: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async handlePaySuiteWebhook(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { PaySuiteService } = await import('./paysuite.service');
+      const signature = req.headers['x-signature'] as string | undefined;
+
+      const isValid = PaySuiteService.verifySignature(JSON.stringify(req.body), signature);
+      if (!isValid) {
+        return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Assinatura inválida do PaySuite.' } });
+      }
+
+      const result = await PaySuiteService.processWebhook(req.body);
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async handleWebhook(req: Request, res: Response, next: NextFunction) {
     try {
       const providerParam = (req.params.provider || req.body.provider || 'MOCK_SANDBOX').toUpperCase() as PaymentProvider;
