@@ -42,16 +42,17 @@ export class PaymentController {
 
   static async handlePaySuiteWebhook(req: Request, res: Response, next: NextFunction) {
     try {
-      const { PaySuiteService } = await import('./paysuite.service');
+      const { PaySuiteService, verifyPaySuiteWebhookSignature } = await import('./paysuite.service');
       const signature = req.headers['x-signature'] as string | undefined;
 
-      const isValid = PaySuiteService.verifySignature(JSON.stringify(req.body), signature);
+      const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      const isValid = verifyPaySuiteWebhookSignature(rawBody, signature);
       if (!isValid) {
-        return res.status(401).json({ error: { code: 'INVALID_SIGNATURE', message: 'Assinatura inválida do PaySuite.' } });
+        return res.status(400).json({ error: { code: 'INVALID_SIGNATURE', message: 'Assinatura inválida do PaySuite.' } });
       }
 
       const result = await PaySuiteService.processWebhook(req.body);
-      return res.status(200).json({ success: true, data: result });
+      return res.status(200).json({ received: true, data: result });
     } catch (error) {
       next(error);
     }
