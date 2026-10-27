@@ -1,8 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReaderAuth } from '../context/ReaderAuthContext';
-import { formatMoney } from '@vuka/shared';
-import { BookOpen, ShoppingBag, MessageCircle, ArrowLeft, CheckCircle2, CreditCard, Sparkles, X } from 'lucide-react';
+import { formatMoney } from '../shared/currency';
+import {
+  BookOpen,
+  ShoppingBag,
+  ArrowLeft,
+  CheckCircle2,
+  CreditCard,
+  Smartphone,
+  X,
+  Loader2,
+  ExternalLink
+} from 'lucide-react';
 
 export const CatalogStorePage: React.FC = () => {
   const { user } = useReaderAuth();
@@ -11,16 +21,24 @@ export const CatalogStorePage: React.FC = () => {
   const [catalog, setCatalog] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // WhatsApp Checkout Modal
+  // Web Checkout Modal State
   const [selectedOffer, setSelectedOffer] = useState<any | null>(null);
-  const [buyerPhone, setBuyerPhone] = useState(user?.phone || '258841234567');
-  const [createdOrder, setCreatedOrder] = useState<any | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'mpesa' | 'emola' | 'credit_card'>('mpesa');
+  const [buyerPhone, setBuyerPhone] = useState(user?.phone || '');
   const [processing, setProcessing] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<any | null>(null);
   const [paidSuccess, setPaidSuccess] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   useEffect(() => {
     loadCatalog();
   }, []);
+
+  useEffect(() => {
+    if (user?.phone && !buyerPhone) {
+      setBuyerPhone(user.phone);
+    }
+  }, [user]);
 
   const loadCatalog = async () => {
     try {
@@ -35,44 +53,117 @@ export const CatalogStorePage: React.FC = () => {
     }
   };
 
-  const handleStartOrder = async () => {
+  // 1. Iniciar compra direta na Web via PaySuite
+  const handlePay = async () => {
     if (!selectedOffer) return;
+    if ((paymentMethod === 'mpesa' || paymentMethod === 'emola') && !buyerPhone.trim()) {
+      alert('Por favor insira o seu número de telemóvel para receber o pedido de pagamento.');
+      return;
+    }
+
     setProcessing(true);
     try {
-      const res = await fetch('/api/v1/orders', {
+      // 1.1 Cria o pedido no canal WEB
+      const orderRes = await fetch('/api/v1/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           offerId: selectedOffer.id,
           buyerContact: buyerPhone,
-          channel: 'whatsapp'
+          channel: 'web'
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Erro ao criar pedido.');
-      setCreatedOrder(data.order);
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        throw new Error(orderData.error?.message || 'Erro ao criar pedido.');
+      }
+
+      const order = orderData.order;
+
+      // 1.2 Dispara o pagamento no PaySuite
+      const payRes = await fetch('/api/v1/payments/paysuite/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          method: paymentMethod,
+          phoneNumber: buyerPhone,
+          returnUrl: `${window.location.origin}/library`
+        })
+      });
+
+      const payData = await payRes.json();
+      if (!payRes.ok) {
+        throw new Error(payData.error?.message || 'Falha ao iniciar pagamento com PaySuite.');
+      }
+
+      setPaymentResult({
+        ...payData.payment,
+        orderReference: order.publicReference,
+        orderId: order.id
+      });
+
+      // Se for Cartão e tiver link de checkout, pode redirecionar ou abrir
+      if (payData.payment.checkoutUrl && paymentMethod === 'credit_card') {
+        window.open(payData.payment.checkoutUrl, '_blank');
+      }
+
+      // Inicia polling para verificar se o pagamento foi concluído
+      startStatusPolling(order.publicReference);
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || 'Erro durante o processo de pagamento.');
     } finally {
       setProcessing(false);
     }
   };
 
-  const handleSimulatePayment = async () => {
-    if (!createdOrder) return;
+  // Polling para detetar aprovação automática via Webhook do PaySuite
+  const startStatusPolling = (orderReference: string) => {
+    setCheckingStatus(true);
+    let attempts = 0;
+    const maxAttempts = 30; // 30 tentativas * 3s = 90 segundos
+
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/v1/orders/ref/${orderReference}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.order?.status === 'PAID') {
+            clearInterval(interval);
+            setCheckingStatus(false);
+            setPaidSuccess(true);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignora erros de polling momentâneos
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        setCheckingStatus(false);
+      }
+    }, 3000);
+  };
+
+  const handleSimulateInstantConfirm = async () => {
+    if (!paymentResult?.orderReference) return;
     setProcessing(true);
     try {
       const res = await fetch('/api/v1/whatsapp/simulate-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderReference: createdOrder.publicReference })
+        body: JSON.stringify({ orderReference: paymentResult.orderReference })
       });
-
-      if (!res.ok) throw new Error('Falha ao confirmar pagamento.');
-      setPaidSuccess(true);
-    } catch (err: any) {
-      alert(err.message);
+      if (res.ok) {
+        setPaidSuccess(true);
+      } else {
+        alert('Falha ao confirmar transação de teste.');
+      }
+    } catch (e: any) {
+      alert(e.message);
     } finally {
       setProcessing(false);
     }
@@ -80,8 +171,9 @@ export const CatalogStorePage: React.FC = () => {
 
   const resetModal = () => {
     setSelectedOffer(null);
-    setCreatedOrder(null);
+    setPaymentResult(null);
     setPaidSuccess(false);
+    setCheckingStatus(false);
   };
 
   return (
@@ -91,51 +183,66 @@ export const CatalogStorePage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => navigate('/library')}
-            style={{ background: 'none', border: 'none', color: 'var(--color-text-main)', cursor: 'pointer', padding: '4px' }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--color-text-main)',
+              cursor: 'pointer',
+              padding: '4px'
+            }}
           >
             <ArrowLeft size={20} />
           </button>
           <div>
             <h1 style={{ fontSize: '18px', fontWeight: 800 }}>Banca Digital VUKA</h1>
-            <p style={{ fontSize: '12px', color: 'var(--color-text-dim)' }}>Jornais e Revistas em Moçambique</p>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-dim)' }}>
+              Compre e leia edições diretamente no navegador
+            </p>
           </div>
         </div>
       </header>
 
       <main style={{ padding: '20px' }}>
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(124, 58, 237, 0.2))',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '20px',
-          marginBottom: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
-          <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '12px',
-            backgroundColor: '#00a884',
+        {/* Banner informativo da Web */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(16, 185, 129, 0.15))',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '16px 20px',
+            marginBottom: '24px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            flexShrink: 0
-          }}>
-            <MessageCircle size={24} />
+            gap: '14px'
+          }}
+        >
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              backgroundColor: '#2563eb',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              flexShrink: 0
+            }}
+          >
+            <Smartphone size={22} />
           </div>
           <div>
-            <h2 style={{ fontSize: '15px', fontWeight: 700 }}>Venda Direta via WhatsApp</h2>
-            <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
-              Escolha uma edição abaixo para comprar e receber o acesso imediato via M-Pesa ou E-Mola.
+            <h2 style={{ fontSize: '14px', fontWeight: 700 }}>Pagamento Instantâneo via PaySuite</h2>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+              Pague com <strong>M-Pesa</strong>, <strong>e-Mola</strong> ou <strong>Cartão</strong> diretamente na Web.
             </p>
           </div>
         </div>
 
         {loading ? (
-          <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '40px' }}>A carregar a banca...</p>
+          <p style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '40px' }}>
+            A carregar a banca...
+          </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
             {catalog.map((pub) => (
@@ -148,11 +255,9 @@ export const CatalogStorePage: React.FC = () => {
                   padding: '20px'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 800 }}>{pub.title}</h3>
-                    <p style={{ fontSize: '12px', color: '#60a5fa', fontWeight: 600 }}>{pub.publisherName}</p>
-                  </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800 }}>{pub.title}</h3>
+                  <p style={{ fontSize: '12px', color: '#60a5fa', fontWeight: 600 }}>{pub.publisherName}</p>
                 </div>
 
                 <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '18px' }}>
@@ -160,12 +265,18 @@ export const CatalogStorePage: React.FC = () => {
                 </p>
 
                 {/* Available Offers for this Publication */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: '12px'
+                  }}
+                >
                   {pub.offers?.map((offer: any) => (
                     <div
                       key={offer.id}
                       style={{
-                        padding: '14px',
+                        padding: '16px',
                         backgroundColor: 'var(--color-surface)',
                         border: '1px solid var(--color-border)',
                         borderRadius: 'var(--radius-md)',
@@ -175,24 +286,31 @@ export const CatalogStorePage: React.FC = () => {
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: '11px', color: 'var(--color-text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--color-text-dim)',
+                            textTransform: 'uppercase',
+                            fontWeight: 700
+                          }}
+                        >
                           {offer.type === 'SINGLE_EDITION' ? 'Edição Avulsa' : 'Assinatura'}
                         </div>
                         <div style={{ fontWeight: 700, fontSize: '15px', marginTop: '2px', marginBottom: '6px' }}>
                           {offer.title}
                         </div>
-                        <div style={{ fontSize: '18px', fontWeight: 800, color: '#34d399', marginBottom: '14px' }}>
+                        <div style={{ fontSize: '20px', fontWeight: 900, color: '#10b981', marginBottom: '14px' }}>
                           {formatMoney(offer.priceMinorUnits, offer.currency)}
                         </div>
                       </div>
 
                       <button
-                        className="btn btn-whatsapp"
+                        className="btn btn-primary"
                         style={{ width: '100%', fontSize: '13px', padding: '10px' }}
                         onClick={() => setSelectedOffer(offer)}
                       >
-                        <MessageCircle size={16} />
-                        <span>Comprar no WhatsApp</span>
+                        <CreditCard size={16} />
+                        <span>Comprar Agora</span>
                       </button>
                     </div>
                   ))}
@@ -203,125 +321,231 @@ export const CatalogStorePage: React.FC = () => {
         )}
       </main>
 
-      {/* Modal Checkout WhatsApp */}
+      {/* Modal Checkout Web Direto (PaySuite) */}
       {selectedOffer && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          backdropFilter: 'blur(6px)',
-          zIndex: 100,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px'
-        }}>
-          <div style={{
-            maxWidth: '440px',
-            width: '100%',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              padding: '16px 20px',
-              backgroundColor: '#1f2a40',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '440px',
+              width: '100%',
+              backgroundColor: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-lg)',
+              overflow: 'hidden'
+            }}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                backgroundColor: 'rgba(255,255,255,0.03)',
+                borderBottom: '1px solid var(--color-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageCircle size={18} color="#00a884" />
-                <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Compra via WhatsApp</h3>
+                <CreditCard size={18} color="#10b981" />
+                <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Pagamento na Web</h3>
               </div>
-              <button onClick={resetModal} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button
+                onClick={resetModal}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+              >
                 <X size={20} />
               </button>
             </div>
 
             <div style={{ padding: '24px' }}>
-              {!createdOrder ? (
+              {!paymentResult ? (
                 <div>
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--color-text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>Oferta Selecionada</div>
-                    <div style={{ fontSize: '16px', fontWeight: 800, marginTop: '2px' }}>{selectedOffer.title}</div>
-                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#34d399', marginTop: '4px' }}>
+                  <div style={{ marginBottom: '18px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-dim)', textTransform: 'uppercase', fontWeight: 700 }}>
+                      Item a pagar
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 800, marginTop: '2px' }}>
+                      {selectedOffer.title}
+                    </div>
+                    <div style={{ fontSize: '22px', fontWeight: 900, color: '#10b981', marginTop: '4px' }}>
                       {formatMoney(selectedOffer.priceMinorUnits, selectedOffer.currency)}
                     </div>
                   </div>
 
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '6px' }}>
-                      Seu Número de WhatsApp (Moçambique)
+                  {/* Seleção de Método de Pagamento */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--color-text-dim)', marginBottom: '8px', textTransform: 'uppercase' }}>
+                      Escolha o Método
                     </label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={buyerPhone}
-                      onChange={(e) => setBuyerPhone(e.target.value)}
-                      placeholder="258841234567"
-                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('mpesa')}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 'var(--radius-md)',
+                          border: `2px solid ${paymentMethod === 'mpesa' ? '#ef4444' : 'var(--color-border)'}`,
+                          backgroundColor: paymentMethod === 'mpesa' ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                          color: 'var(--color-text-main)',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          fontSize: '13px'
+                        }}
+                      >
+                        🔴 M-Pesa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('emola')}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 'var(--radius-md)',
+                          border: `2px solid ${paymentMethod === 'emola' ? '#eab308' : 'var(--color-border)'}`,
+                          backgroundColor: paymentMethod === 'emola' ? 'rgba(234, 179, 8, 0.1)' : 'transparent',
+                          color: 'var(--color-text-main)',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          fontSize: '13px'
+                        }}
+                      >
+                        🟡 e-Mola
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('credit_card')}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 'var(--radius-md)',
+                          border: `2px solid ${paymentMethod === 'credit_card' ? '#3b82f6' : 'var(--color-border)'}`,
+                          backgroundColor: paymentMethod === 'credit_card' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                          color: 'var(--color-text-main)',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          fontSize: '13px'
+                        }}
+                      >
+                        💳 Cartão
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Número de Telefone para M-Pesa ou E-Mola */}
+                  {(paymentMethod === 'mpesa' || paymentMethod === 'emola') && (
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '6px' }}>
+                        Número de Telemóvel ({paymentMethod === 'mpesa' ? 'Vodacom' : 'Movitel'})
+                      </label>
+                      <input
+                        type="tel"
+                        className="form-input"
+                        value={buyerPhone}
+                        onChange={(e) => setBuyerPhone(e.target.value)}
+                        placeholder="Ex: 841234567"
+                        style={{ fontSize: '15px', letterSpacing: '0.5px' }}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--color-text-dim)', marginTop: '4px', display: 'block' }}>
+                        Receberá um alerta no ecrã do seu telemóvel para digitar o seu PIN.
+                      </span>
+                    </div>
+                  )}
+
                   <button
-                    className="btn btn-whatsapp"
-                    style={{ width: '100%', padding: '14px' }}
-                    onClick={handleStartOrder}
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '14px', fontSize: '14px', fontWeight: 700 }}
+                    onClick={handlePay}
                     disabled={processing}
                   >
-                    <span>{processing ? 'A gerar pedido...' : 'Gerar Pedido e Referência'}</span>
+                    {processing ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        <Loader2 size={18} className="animate-spin" /> A comunicar com PaySuite...
+                      </span>
+                    ) : (
+                      `Pagar ${formatMoney(selectedOffer.priceMinorUnits, selectedOffer.currency)} via PaySuite`
+                    )}
                   </button>
                 </div>
               ) : !paidSuccess ? (
                 <div>
-                  <div style={{
-                    padding: '16px',
-                    backgroundColor: 'rgba(0, 168, 132, 0.1)',
-                    border: '1px solid #00a884',
-                    borderRadius: 'var(--radius-md)',
-                    marginBottom: '20px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '12px', color: '#00a884', fontWeight: 700 }}>REFERÊNCIA DE PAGAMENTO GERADA</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#f8fafc', letterSpacing: '1px', margin: '6px 0' }}>
-                      {createdOrder.publicReference}
+                  <div
+                    style={{
+                      padding: '18px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid #10b981',
+                      borderRadius: 'var(--radius-md)',
+                      marginBottom: '20px',
+                      textAlign: 'center'
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Pedido Iniciado no PaySuite
                     </div>
-                    <div style={{ fontSize: '15px', color: '#34d399', fontWeight: 700 }}>
-                      Valor: {formatMoney(createdOrder.totalMinorUnits, createdOrder.currency)}
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: '#f8fafc', letterSpacing: '1px', margin: '8px 0' }}>
+                      {paymentResult.orderReference}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#10b981', fontWeight: 700 }}>
+                      Valor: {paymentResult.amount} MZN
                     </div>
                   </div>
 
-                  <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', lineHeight: '1.4', marginBottom: '20px' }}>
-                    No seu telefone M-Pesa ou E-Mola, transfira o valor indicando a referência acima.
-                  </p>
+                  {checkingStatus ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)', marginBottom: '20px' }}>
+                      <Loader2 size={20} color="#60a5fa" className="animate-spin" />
+                      <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                        A aguardar que digite o PIN no seu telemóvel...
+                      </span>
+                    </div>
+                  ) : null}
 
+                  {paymentResult.checkoutUrl && (
+                    <a
+                      href={paymentResult.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary"
+                      style={{ width: '100%', padding: '12px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                    >
+                      <span>Abrir Tela de Pagamento PaySuite</span>
+                      <ExternalLink size={16} />
+                    </a>
+                  )}
+
+                  {/* Botão de simulação/teste em ambiente de desenvolvimento */}
                   <button
-                    className="btn btn-primary"
-                    style={{ width: '100%', padding: '14px' }}
-                    onClick={handleSimulatePayment}
+                    className="btn btn-secondary"
+                    style={{ width: '100%', padding: '12px', fontSize: '13px' }}
+                    onClick={handleSimulateInstantConfirm}
                     disabled={processing}
                   >
-                    <CreditCard size={18} />
-                    <span>{processing ? 'A validar transação...' : 'Simular Pagamento Confirmado'}</span>
+                    {processing ? 'A confirmar...' : '⚡ Confirmar Pagamento Imediatamente (Modo Teste)'}
                   </button>
                 </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: '10px 0' }}>
-                  <CheckCircle2 size={54} color="#34d399" style={{ margin: '0 auto 16px' }} />
-                  <h3 style={{ fontSize: '20px', fontWeight: 800 }}>Acesso Concedido!</h3>
+                  <CheckCircle2 size={56} color="#10b981" style={{ margin: '0 auto 16px' }} />
+                  <h3 style={{ fontSize: '20px', fontWeight: 800 }}>Pagamento Confirmado!</h3>
                   <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: '8px 0 24px' }}>
-                    O pagamento foi reconciliado e a sua nova edição já se encontra disponível na biblioteca.
+                    A transação foi aprovada pelo PaySuite. A sua edição já está disponível para leitura.
                   </p>
                   <button
-                    className="btn btn-whatsapp"
-                    style={{ width: '100%', padding: '14px' }}
+                    className="btn btn-primary"
+                    style={{ width: '100%', padding: '14px', fontWeight: 700 }}
                     onClick={() => {
                       resetModal();
                       navigate('/library');
                     }}
                   >
-                    Abrir na Minha Biblioteca
+                    Abrir Minha Edição na Biblioteca
                   </button>
                 </div>
               )}
