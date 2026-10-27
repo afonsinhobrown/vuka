@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { AdminLayout } from './components/AdminLayout';
@@ -14,7 +14,7 @@ import { WhatsAppSimulatorPage } from './pages/WhatsAppSimulatorPage';
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { token } = useAuth();
   if (!token) {
-    return <Navigate to="login" replace />;
+    return <Navigate to="/login" replace />;
   }
   return children;
 };
@@ -22,9 +22,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/admin">
+      <HashRouter>
         <Routes>
-          <Route path="login" element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
 
           <Route
             path="/"
@@ -45,7 +45,7 @@ export const App: React.FC = () => {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 };
