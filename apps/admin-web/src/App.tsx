@@ -14,7 +14,7 @@ import { WhatsAppSimulatorPage } from './pages/WhatsAppSimulatorPage';
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { token } = useAuth();
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="login" replace />;
   }
   return children;
 };
@@ -24,7 +24,7 @@ export const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter basename="/admin">
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="login" element={<LoginPage />} />
 
           <Route
             path="/"
