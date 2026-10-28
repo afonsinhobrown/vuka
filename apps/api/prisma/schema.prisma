@@ -125,6 +125,7 @@ model User {
   entitlements     Entitlement[]
   auditEvents      AuditEvent[]
   articleReads     ArticleRead[]
+  authoredArticles Article[]
 
   @@map("users")
 }
@@ -345,13 +346,17 @@ model Article {
   publisherId   String
   publicationId String?
   sectionId     String?
+  authorId      String?
+  authorName    String?
   title         String
   slug          String
+  subtitle      String?
   excerpt       String?       @db.Text
   contentHtml   String?       @db.Text
   bodyJson      Json?
   coverAssetId  String?
   pdfAssetId    String?
+  tags          String[]      @default([])
   isPremium     Boolean       @default(true)
   paywallType   PaywallType   @default(HARD)
   status        ArticleStatus @default(DRAFT)
@@ -363,6 +368,7 @@ model Article {
   publisher    Publisher     @relation(fields: [publisherId], references: [id], onDelete: Cascade)
   publication  Publication?  @relation(fields: [publicationId], references: [id], onDelete: SetNull)
   section      Section?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  author       User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
   offers       Offer[]
   entitlements Entitlement[]
   reads        ArticleRead[]

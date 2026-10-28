@@ -16,6 +16,7 @@ import libraryRoutes from './modules/library/library.routes';
 import contentRoutes from './modules/content/content.routes';
 import whatsappRoutes from './modules/whatsapp/whatsapp.routes';
 import reportRoutes from './modules/reports/report.routes';
+import articlesRoutes from './modules/articles/articles.routes';
 import { errorMiddleware } from './middlewares/error.middleware';
 
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/v1/me/library', libraryRoutes);
 app.use('/api/v1', contentRoutes);
 app.use('/api/v1/whatsapp', whatsappRoutes);
 app.use('/api/v1/admin/reports', reportRoutes);
+app.use('/api/v1/articles', articlesRoutes);
 
 // Error Middleware (Standard RFC format for VUKA)
 app.use(errorMiddleware);
