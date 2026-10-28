@@ -230,61 +230,46 @@ export class PaySuiteService {
     }
 
     const amountMzn = Number((order.totalMinorUnits / 100).toFixed(2));
-    const token = apiToken();
 
-    let chargeResult: PaySuiteChargeResult;
+  const phone = data.phoneNumber || order.buyerContact || order.user?.phone;
+  const contactId = phone
+    ? await this.findOrCreateContact({
+        phone,
+        name: order.buyerName || order.user?.displayName,
+        email: order.user?.email
+      })
+    : null;
 
-    if (token) {
-      const phone = data.phoneNumber || order.buyerContact || order.user?.phone;
-      const contactId = phone
-        ? await this.findOrCreateContact({
-            phone,
-            name: order.buyerName || order.user?.displayName,
-            email: order.user?.email
-          })
-        : null;
+  const payload: Record<string, unknown> = {
+    amount: amountMzn,
+    reference: order.publicReference.slice(0, 50),
+    description: `VUKA ${order.publicReference}`.slice(0, 125)
+  };
 
-      const payload: Record<string, unknown> = {
-        amount: amountMzn,
-        reference: order.publicReference.slice(0, 50),
-        description: `VUKA ${order.publicReference}`.slice(0, 125)
-      };
+  if (data.method) payload.method = data.method;
+  if (contactId) payload.contact_id = contactId;
+  if (data.returnUrl) payload.return_url = data.returnUrl;
 
-      if (data.method) payload.method = data.method;
-      if (contactId) payload.contact_id = contactId;
-      if (data.returnUrl) payload.return_url = data.returnUrl;
+  // Webhook automático para este pedido
+  const baseApiUrl = process.env.BASE_URL || 'http://localhost:4000';
+  payload.webhook_url = `${baseApiUrl}/api/v1/payments/webhook/paysuite`;
 
-      // Webhook automático para este pedido
-      const baseApiUrl = process.env.BASE_URL || 'http://localhost:4000';
-      payload.webhook_url = `${baseApiUrl}/api/v1/payments/webhook/paysuite`;
+  const charge = await paysuiteRequest<Record<string, unknown>>('/payments', {
+    method: 'POST',
+    body: payload
+  });
 
-      const charge = await paysuiteRequest<Record<string, unknown>>('/payments', {
-        method: 'POST',
-        body: payload
-      });
-
-      chargeResult = {
-        id: String(charge.id ?? ''),
-        status: String(charge.status || 'pending').toLowerCase(),
-        amount: toNumber(charge.amount, amountMzn),
-        reference: String(charge.reference || order.publicReference),
-        method: charge.method ? String(charge.method) : data.method,
-        checkoutUrl:
-          typeof charge.checkout_url === 'string' && charge.checkout_url
-            ? charge.checkout_url
-            : undefined
-      };
-    } else {
-      // Modo sandbox/desenvolvimento
-      chargeResult = {
-        id: `mock_ps_${order.publicReference}`,
-        status: 'pending',
-        amount: amountMzn,
-        reference: order.publicReference,
-        method: data.method || 'mpesa',
-        checkoutUrl: `https://paysuite.tech/checkout/mock_${order.publicReference}`
-      };
-    }
+  chargeResult = {
+    id: String(charge.id ?? ''),
+    status: String(charge.status || 'pending').toLowerCase(),
+    amount: toNumber(charge.amount, amountMzn),
+    reference: String(charge.reference || order.publicReference),
+    method: charge.method ? String(charge.method) : data.method,
+    checkoutUrl:
+      typeof charge.checkout_url === 'string' && charge.checkout_url
+        ? charge.checkout_url
+        : undefined
+  };
 
     // Grava o pagamento na base de dados com idempotência
     const payment = await prisma.payment.create({
