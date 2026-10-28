@@ -249,12 +249,20 @@ export class PaymentService {
       let entitlementId = existingEntitlement?.id;
 
       if (!existingEntitlement) {
+        let scope: any = 'EDITION';
+        if ((offer as any).type === 'ALL_ACCESS') scope = 'ALL_ACCESS';
+        else if ((offer as any).type === 'SUBSCRIPTION') scope = 'PUBLICATION';
+        else if ((offer as any).type === 'ARTICLE') scope = 'ARTICLE';
+        else if ((offer as any).type === 'SINGLE_EDITION') scope = 'EDITION';
+
         const newEntitlement = await tx.entitlement.create({
           data: {
             userId,
             orderId: order.id,
             editionId: offer.editionId || null,
             publicationId: offer.publicationId || null,
+            articleId: (offer as any).articleId || null,
+            scope,
             startsAt,
             endsAt,
             status: EntitlementStatus.ACTIVE,
@@ -323,12 +331,20 @@ export class PaymentService {
         });
 
         if (!exists) {
+          let scope: any = 'EDITION';
+          if ((order.offer as any).type === 'ALL_ACCESS') scope = 'ALL_ACCESS';
+          else if ((order.offer as any).type === 'SUBSCRIPTION') scope = 'PUBLICATION';
+          else if ((order.offer as any).type === 'ARTICLE') scope = 'ARTICLE';
+          else if ((order.offer as any).type === 'SINGLE_EDITION') scope = 'EDITION';
+
           await tx.entitlement.create({
             data: {
               userId: order.userId,
               orderId: order.id,
               editionId: order.offer.editionId || null,
               publicationId: order.offer.publicationId || null,
+              articleId: (order.offer as any).articleId || null,
+              scope,
               startsAt: new Date(),
               endsAt: order.offer.validityDays
                 ? new Date(Date.now() + order.offer.validityDays * 24 * 60 * 60 * 1000)

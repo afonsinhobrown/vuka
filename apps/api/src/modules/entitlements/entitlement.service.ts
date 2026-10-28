@@ -9,6 +9,17 @@ export class EntitlementService {
   static async hasActiveAccessToEdition(userId: string, editionId: string): Promise<boolean> {
     const now = new Date();
 
+    const global = await prisma.entitlement.findFirst({
+      where: {
+        userId,
+        scope: 'ALL_ACCESS' as any,
+        status: EntitlementStatus.ACTIVE,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gte: now } }]
+      }
+    });
+    if (global) return true;
+
     const edition = await prisma.edition.findUnique({
       where: { id: editionId },
       select: { id: true, publicationId: true }
@@ -44,6 +55,53 @@ export class EntitlementService {
     });
 
     return !!publicationEntitlement;
+  }
+
+  static async hasActiveAccessToArticle(userId: string, articleId: string): Promise<boolean> {
+    const now = new Date();
+
+    const global = await prisma.entitlement.findFirst({
+      where: {
+        userId,
+        scope: 'ALL_ACCESS' as any,
+        status: EntitlementStatus.ACTIVE,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gte: now } }]
+      }
+    });
+    if (global) return true;
+
+    const article = await prisma.article.findUnique({
+      where: { id: articleId },
+      select: { id: true, publicationId: true }
+    });
+    if (!article) return false;
+
+    const articleEnt = await prisma.entitlement.findFirst({
+      where: {
+        userId,
+        articleId,
+        status: EntitlementStatus.ACTIVE,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gte: now } }]
+      }
+    });
+    if (articleEnt) return true;
+
+    if (article.publicationId) {
+      const pubEnt = await prisma.entitlement.findFirst({
+        where: {
+          userId,
+          publicationId: article.publicationId,
+          status: EntitlementStatus.ACTIVE,
+          startsAt: { lte: now },
+          endsAt: { gte: now }
+        }
+      });
+      if (pubEnt) return true;
+    }
+
+    return false;
   }
 
   /**
