@@ -154,6 +154,18 @@ No Cloudflare → R2 → bucket → **Settings → CORS Policy**:
 
 O bucket fica **privado** (sem domínio público `r2.dev`): todo o acesso é por URL assinado.
 
+### Depois de correr `db:seed`
+
+O seed grava os PDFs e capas de demonstração **só no disco local** (`apps/api/storage/`), que não existe na Vercel. É preciso enviá-los para o R2:
+
+```bash
+npm --workspace=apps/api run db:seed              # cria dados + ficheiros locais
+npm --workspace=apps/api run storage:upload-seed  # envia esses ficheiros para o R2
+```
+
+Sem o segundo comando as edições aparecem na biblioteca mas o PDF devolve 404 (o leitor fica em branco).
+
+
 ---
 
 ## 💳 Pagamentos (PaySuite)
