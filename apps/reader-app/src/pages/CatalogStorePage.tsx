@@ -200,6 +200,27 @@ export const CatalogStorePage: React.FC = () => {
             </p>
           </div>
         </div>
+
+        {/* Entrada para os jornais/editoras */}
+        <a
+          href="/editora"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '12px',
+            color: 'var(--color-text-muted)',
+            textDecoration: 'none',
+            border: '1px solid var(--color-border)',
+            borderRadius: '999px',
+            padding: '6px 12px',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          É um jornal? Publique aqui →
+        </a>
       </header>
 
       <main style={{ padding: '20px' }}>

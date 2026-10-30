@@ -197,6 +197,12 @@ export const ReaderLoginPage: React.FC = () => {
           >
             Acesso ao Painel Administrativo ↗
           </a>
+          <a
+            href="/editora"
+            style={{ background: 'none', border: 'none', color: '#34d399', fontSize: '13px', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' }}
+          >
+            É um jornal? Entrar no Portal da Editora ↗
+          </a>
         </div>
       </div>
     </div>

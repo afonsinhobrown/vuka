@@ -80,6 +80,11 @@ export const AdminLayout: React.FC = () => {
             <MessageSquare size={18} />
             <span>Simulador WhatsApp</span>
           </NavLink>
+
+          <a href="/editora" target="_blank" rel="noreferrer" className="nav-link" style={{ textDecoration: 'none' }}>
+            <Building size={18} />
+            <span>Portal da Editora ↗</span>
+          </a>
         </nav>
 
         <div className="sidebar-user">
