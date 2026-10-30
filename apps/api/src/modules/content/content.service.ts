@@ -2,11 +2,18 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middlewares/error.middleware';
 import { EntitlementService } from '../entitlements/entitlement.service';
 import { createSignedContentToken, verifySignedContentToken } from '../../lib/crypto';
+import { isRemoteStorageEnabled } from '../../lib/storage';
 import { SecureReadAccessDTO } from '@vuka/shared';
 import fs from 'fs';
 import path from 'path';
 
 const STORAGE_DIR = process.env.STORAGE_DIR || './storage';
+
+/** Com R2 configurado o ficheiro não está no disco: `filePath` vem null. */
+export interface AssetLocation {
+  asset: { id: string; storageKey: string; mimeType: string; visibility: string; originalName: string | null };
+  filePath: string | null;
+}
 
 export class ContentService {
   /**
@@ -44,11 +51,16 @@ export class ContentService {
   }
 
   /**
-   * Localiza ficheiro do asset e valida visibilidade
+   * Localiza ficheiro do asset e valida visibilidade.
+   * Com object storage remoto (R2) o ficheiro não passa pelo disco local.
    */
-  static async getAssetFile(assetId: string) {
+  static async getAssetFile(assetId: string): Promise<AssetLocation | null> {
     const asset = await prisma.asset.findUnique({ where: { id: assetId } });
     if (!asset) return null;
+
+    if (isRemoteStorageEnabled()) {
+      return { asset, filePath: null };
+    }
 
     const subfolder = asset.visibility === 'PUBLIC' ? 'public' : 'private';
     const filePath = path.join(STORAGE_DIR, subfolder, asset.storageKey);
@@ -61,9 +73,9 @@ export class ContentService {
   }
 
   /**
-   * Valida token assinado e retorna caminho do ficheiro seguro
+   * Valida token assinado e devolve o asset (ficheiro local ou referência remota).
    */
-  static async getProtectedContentByToken(token: string) {
+  static async getProtectedContentByToken(token: string): Promise<AssetLocation> {
     const payload = verifySignedContentToken(token);
     if (!payload) {
       throw new AppError('Link de leitura inválido ou expirado. Por favor atualize a sua biblioteca.', 403, 'TOKEN_EXPIRED_OR_INVALID');
@@ -75,6 +87,10 @@ export class ContentService {
 
     if (!asset) {
       throw new AppError('Conteúdo não localizado.', 404, 'CONTENT_NOT_FOUND');
+    }
+
+    if (isRemoteStorageEnabled()) {
+      return { asset, filePath: null };
     }
 
     const filePath = path.join(STORAGE_DIR, 'private', asset.storageKey);

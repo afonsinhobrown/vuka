@@ -31,7 +31,17 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id']
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  express.json({
+    limit: '10mb',
+    // Guarda o corpo cru: a assinatura HMAC dos webhooks (PaySuite) tem de ser
+    // verificada sobre os bytes originais, não sobre o JSON re-serializado.
+    verify: (req, _res, buf) => {
+      (req as unknown as { rawBody?: string }).rawBody = buf.toString('utf8');
+    }
+  })
+);
+
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health Check

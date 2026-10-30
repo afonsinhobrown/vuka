@@ -11,6 +11,7 @@ import {
   UserStatus
 } from '@vuka/shared';
 import { AuditService } from '../audit/audit.service';
+import { resolveSandboxFixedAmount } from '../../lib/sandbox-payments';
 import { v4 as uuidv4 } from 'uuid';
 
 export class PaymentService {
@@ -121,12 +122,32 @@ export class PaymentService {
     }
 
     // 3. Validação de Valor e Moeda (RB-02 e RNF-08)
+    let sandboxMismatch: { received: number; expected: number } | null = null;
+
     if (status === 'CONFIRMED') {
-      if (order.totalMinorUnits !== amountMinorUnits || order.currency !== currency) {
-        throw new AppError(
-          `Incompatibilidade no valor/moeda recebido (${amountMinorUnits} ${currency}) vs esperado (${order.totalMinorUnits} ${order.currency})`,
-          400,
-          'AMOUNT_MISMATCH'
+      const amountMatches =
+        order.totalMinorUnits === amountMinorUnits && order.currency === currency;
+
+      if (!amountMatches) {
+        // Sandbox (ligado no painel admin): a PaySuite cobra um valor fixo
+        // (10 MT) independentemente do preço do jornal. Só aceitamos se for
+        // exactamente esse valor.
+        const sandboxAmount = await resolveSandboxFixedAmount();
+        const isSandboxCharge =
+          sandboxAmount !== null && amountMinorUnits === sandboxAmount && currency === order.currency;
+
+        if (!isSandboxCharge) {
+          throw new AppError(
+            `Incompatibilidade no valor/moeda recebido (${amountMinorUnits} ${currency}) vs esperado (${order.totalMinorUnits} ${order.currency})`,
+            400,
+            'AMOUNT_MISMATCH'
+          );
+        }
+
+        sandboxMismatch = { received: amountMinorUnits, expected: order.totalMinorUnits };
+        console.warn(
+          `[SANDBOX] Pagamento aceite com valor fixo de sandbox: recebido ${amountMinorUnits} ${currency} ` +
+            `para o pedido ${order.publicReference} (esperado ${order.totalMinorUnits} ${order.currency}).`
         );
       }
     }
@@ -290,6 +311,26 @@ export class PaymentService {
       reason: `Pagamento ${status} via ${provider}. Direito de acesso concedido.`,
       metadata: { externalEventId, amountMinorUnits, currency }
     });
+
+    // Rasto explícito quando o valor de sandbox foi aceito por diferença
+    if (sandboxMismatch) {
+      await AuditService.record({
+        publisherId: order.offer.publisherId,
+        action: 'SANDBOX_PAYMENT_ACCEPTED',
+        entityType: 'ORDER',
+        entityId: order.id,
+        reason:
+          `Valor fixo de sandbox aceite: cobrado ${sandboxMismatch.received} em vez de ` +
+          `${sandboxMismatch.expected} ${order.currency}.`,
+        metadata: {
+          externalEventId,
+          provider,
+          receivedMinorUnits: sandboxMismatch.received,
+          expectedMinorUnits: sandboxMismatch.expected,
+          currency
+        }
+      });
+    }
 
     return result;
   }

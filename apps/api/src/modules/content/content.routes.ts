@@ -13,4 +13,7 @@ router.get('/content/stream/:token', ContentController.streamProtectedContent);
 // 3. Ficheiros públicos (capas)
 router.get('/assets/:id', ContentController.servePublicAsset);
 
+// 4. Diagnóstico do storage configurado (r2 | local)
+router.get('/content/storage-status', ContentController.storageStatus);
+
 export default router;

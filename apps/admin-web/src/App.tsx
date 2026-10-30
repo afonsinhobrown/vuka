@@ -9,6 +9,7 @@ import { PublicationsPage } from './pages/PublicationsPage';
 import { OffersPage } from './pages/OffersPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { AuditPage } from './pages/AuditPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { WhatsAppSimulatorPage } from './pages/WhatsAppSimulatorPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -40,6 +41,7 @@ export const App: React.FC = () => {
             <Route path="offers" element={<OffersPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="audit" element={<AuditPage />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="whatsapp-simulator" element={<WhatsAppSimulatorPage />} />
           </Route>
 

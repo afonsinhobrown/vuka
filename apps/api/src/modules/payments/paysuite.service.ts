@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middlewares/error.middleware';
 import { PaymentProvider, PaymentStatus, OrderStatus } from '@vuka/shared';
 import { PaymentService } from './payment.service';
+import { DEFAULT_SANDBOX_AMOUNT_MINOR_UNITS, resolveSandboxState } from '../../lib/sandbox-payments';
 
 const PAYSUITE_API_URL = (
   process.env.PAYSUITE_API_URL || 'https://paysuite.tech/api/v1'
@@ -36,6 +37,56 @@ function apiToken(): string | null {
 
 function webhookSecret(): string | null {
   return process.env.PAYSUITE_WEBHOOK_SECRET || null;
+}
+
+export type PaySuiteConfigStatus = {
+  provider: 'paysuite';
+  configured: boolean;
+  apiUrl: string;
+  tokenPresent: boolean;
+  webhookSecretPresent: boolean;
+  baseUrl: string;
+  webhookUrl: string;
+  baseUrlLooksLikeLocalhost: boolean;
+  sandboxMode: boolean;
+  sandboxSource: 'settings' | 'env';
+  /** Valor fixo cobrado pela PaySuite em sandbox (minor units). */
+  sandboxFixedAmountMinorUnits: number;
+  missing: string[];
+};
+
+/**
+ * Diagnóstico sem expor segredos: diz apenas o que está (ou não) configurado.
+ * AJUDA: BASE_URL é o que a PaySuite usa para chamar o webhook — se apontar para
+ * localhost, o pagamento nunca confirma o pedido.
+ */
+export async function getPaySuiteConfigStatus(): Promise<PaySuiteConfigStatus> {
+  const token = apiToken();
+  const secret = webhookSecret();
+  const baseUrl = (process.env.BASE_URL || '').trim().replace(/\/+$/, '');
+  const baseUrlLooksLikeLocalhost = /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(baseUrl);
+  const sandbox = await resolveSandboxState();
+
+  const missing: string[] = [];
+  if (!token) missing.push('PAYSUITE_API_TOKEN');
+  if (!secret) missing.push('PAYSUITE_WEBHOOK_SECRET');
+  if (!baseUrl) missing.push('BASE_URL');
+  else if (baseUrlLooksLikeLocalhost) missing.push('BASE_URL (aponta para localhost em vez do domínio público)');
+
+  return {
+    provider: 'paysuite',
+    configured: missing.length === 0,
+    apiUrl: PAYSUITE_API_URL,
+    tokenPresent: Boolean(token),
+    webhookSecretPresent: Boolean(secret),
+    baseUrl,
+    webhookUrl: `${baseUrl || '<BASE_URL em falta>'}/api/v1/payments/webhook/paysuite`,
+    baseUrlLooksLikeLocalhost,
+    sandboxMode: sandbox.enabled,
+    sandboxSource: sandbox.source,
+    sandboxFixedAmountMinorUnits: sandbox.amountMinorUnits ?? DEFAULT_SANDBOX_AMOUNT_MINOR_UNITS,
+    missing
+  };
 }
 
 export function normalizarTelefoneE164(telefone: string | number | null | undefined): string | null {

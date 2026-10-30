@@ -406,3 +406,14 @@ model WebhookEvent {
   @@unique([provider, externalEventId])
   @@map("webhook_events")
 }
+
+/// Configurações da plataforma alteráveis em runtime (ex.: modo sandbox dos pagamentos).
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { uploadAsset } from '../lib/upload';
 import { PublicationDTO, EditionDTO } from '@vuka/shared';
 import { BookOpen, Plus, Upload, Calendar, FileText, CheckCircle2, AlertOctagon, X, AlertCircle } from 'lucide-react';
 
@@ -86,18 +87,9 @@ export const PublicationsPage: React.FC = () => {
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', editionFile);
-      formData.append('isPublic', 'false');
-
-      const uploadRes = await authFetch('/api/v1/catalog/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!uploadRes.ok) throw new Error('Falha no upload do ficheiro PDF.');
-      const uploadData = await uploadRes.json();
-      const contentAssetId = uploadData.asset.id;
+      // 1. Upload do PDF directo para o object storage (R2) — sem limite de 4,5 MB
+      const asset = await uploadAsset(authFetch, editionFile, { visibility: 'PRIVATE' });
+      const contentAssetId = asset.id;
 
       const editionRes = await authFetch('/api/v1/catalog/editions', {
         method: 'POST',

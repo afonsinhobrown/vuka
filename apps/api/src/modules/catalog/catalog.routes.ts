@@ -73,6 +73,21 @@ router.post(
 );
 
 // File uploads
+// Upload directo para object storage (R2): 1) presign 2) PUT do browser 3) complete
+router.post(
+  '/upload/presign',
+  authenticate,
+  requireRole(UserRole.ADMIN, UserRole.PUBLISHER_ADMIN, UserRole.PUBLISHER_EDITOR),
+  CatalogController.presignUpload
+);
+router.post(
+  '/upload/complete',
+  authenticate,
+  requireRole(UserRole.ADMIN, UserRole.PUBLISHER_ADMIN, UserRole.PUBLISHER_EDITOR),
+  CatalogController.completeUpload
+);
+
+// Upload multipart local (fallback de desenvolvimento, sem R2 configurado)
 router.post(
   '/upload',
   authenticate,

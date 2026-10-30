@@ -14,6 +14,18 @@ router.post('/paysuite/initiate', PaymentController.initiatePaySuite);
 // Webhook endpoint oficial do PaySuite
 router.post('/webhook/paysuite', PaymentController.handlePaySuiteWebhook);
 
+// Diagnóstico da configuração (sem expor segredos)
+router.get('/config-status', PaymentController.configStatus);
+
+// Modo sandbox: leitura para o painel e ligar/desligar (só ADMIN, com auditoria)
+router.get('/sandbox', PaymentController.getSandboxMode);
+router.put(
+  '/sandbox',
+  authenticate,
+  requireRole(UserRole.ADMIN),
+  PaymentController.setSandboxMode
+);
+
 // Webhook endpoint genérico para fornecedores (M-Pesa, E-Mola, Mock Sandbox)
 router.post('/webhooks/:provider', PaymentController.handleWebhook);
 

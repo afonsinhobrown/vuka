@@ -11,6 +11,7 @@ import {
   MessageSquare,
   LogOut,
   ShieldCheck,
+  Settings,
   Building
 } from 'lucide-react';
 
@@ -69,6 +70,11 @@ export const AdminLayout: React.FC = () => {
           </NavLink>
 
           <div style={{ height: '1px', backgroundColor: 'var(--color-border)', margin: '12px 0' }} />
+
+          <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <Settings size={18} />
+            <span>Configurações</span>
+          </NavLink>
 
           <NavLink to="/whatsapp-simulator" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <MessageSquare size={18} />

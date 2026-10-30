@@ -105,3 +105,74 @@ npm run dev:reader
    * Clique para abrir o **Leitor Digital PDF** com streaming assinado seguro.
 3. **Testar Governança e Auditoria:**
    * No Painel Admin, consulte o menu **Trilha de Auditoria** para auditar as transações e alterações de preço com ator, data e motivo registados.
+
+---
+
+## 🗄️ Armazenamento de PDFs (Cloudflare R2)
+
+Na Vercel o disco das funções é **efémero e só-leitura** e o *body* de uma Function está limitado a **4,5 MB** — nenhum PDF de jornal passa por lá. Por isso o upload deixou de ir pela API e passou a ser **directo do browser para o R2** com URL assinado:
+
+1. `POST /api/v1/catalog/upload/presign` → API devolve um `PUT` assinado (15 min) e uma `storageKey`.
+2. O browser faz `PUT` do ficheiro para o R2 (não passa pela API).
+3. `POST /api/v1/catalog/upload/complete` → API confirma que o objecto existe (`HEAD` assinado) e regista o `Asset` na BD.
+
+A leitura é entregue por `302` para um URL assinado de **5 minutos** (`GET /api/v1/content/stream/:token`), alinhado com o token HMAC de leitura — os bytes saem do Cloudflare, com **egress gratuito**, em vez de gastar CPU da função.
+
+### Variáveis de ambiente (Vercel → Settings → Environment Variables)
+
+| Variável | Exemplo |
+| :--- | :--- |
+| `OBJECT_STORAGE_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
+| `OBJECT_STORAGE_BUCKET` | `vuka-editions` |
+| `OBJECT_STORAGE_REGION` | `auto` |
+| `OBJECT_STORAGE_ACCESS_KEY_ID` | *(token R2 — Object Read & Write)* |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | *(token R2)* |
+| `OBJECT_STORAGE_PREFIX` | `vuka` (isola as chaves de outras apps no mesmo bucket) |
+
+Sem estas variáveis, o sistema cai para disco local (`STORAGE_DIR`) — útil em desenvolvimento. Para confirmar o que está activo em produção: `GET /api/v1/content/storage-status` → `{ "provider": "r2" }`.
+
+### CORS do bucket (obrigatório para o PUT do browser)
+
+No Cloudflare → R2 → bucket → **Settings → CORS Policy**:
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "https://vuka-kappa.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5175"
+    ],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["content-type"],
+    "ExposeHeaders": ["etag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+O bucket fica **privado** (sem domínio público `r2.dev`): todo o acesso é por URL assinado.
+
+---
+
+## 💳 Pagamentos (PaySuite)
+
+| Variável | Descrição |
+| :--- | :--- |
+| `PAYSUITE_API_URL` | `https://paysuite.tech/api/v1` (ou o host da sandbox, se for diferente) |
+| `PAYSUITE_API_TOKEN` | Token da API (formato `id\|hash`) |
+| `PAYSUITE_WEBHOOK_SECRET` | Secret do webhook (`whsec_...`) — usado para validar o HMAC |
+| `BASE_URL` | **URL pública da API** (`https://vuka-kappa.vercel.app`). É com ela que se constrói o `webhook_url` enviado à PaySuite; com `localhost` o pagamento nunca confirma o pedido |
+| `PAYSUITE_SANDBOX` | `true` em testes, **obrigatoriamente `false` em produção** |
+| `PAYSUITE_SANDBOX_AMOUNT_MINOR_UNITS` | Valor fixo do sandbox (por omissão `1000` = 10,00 MT) |
+
+### Testes em sandbox
+
+Em modo de testes a PaySuite cobra um **valor fixo** (10 MT) independentemente do preço do jornal — o webhook chega com 1000 minor units enquanto o pedido vale, por exemplo, 10 000. Sem tratamento, a validação `RB-02` rejeitava com `AMOUNT_MISMATCH` e o pedido ficava `PENDING` para sempre.
+
+Com `PAYSUITE_SANDBOX=true` a API aceita a notificação **apenas quando o valor recebido é exactamente o valor fixo do sandbox**, grava um evento de auditoria `SANDBOX_PAYMENT_ACCEPTED` e confirma o pedido. Qualquer outro valor continua a ser rejeitado, e em produção (`false`) a validação é estrita.
+
+Diagnóstico sem expor segredos: `GET /api/v1/payments/config-status` (mostra `sandboxMode` e `sandboxFixedAmountMinorUnits`).
+
+

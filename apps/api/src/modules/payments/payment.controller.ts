@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { PaymentService } from './payment.service';
 import { PaymentProvider, UserRole } from '@vuka/shared';
+import { AppError } from '../../middlewares/error.middleware';
 
 export class PaymentController {
   static async initiate(req: Request, res: Response, next: NextFunction) {
@@ -40,12 +41,83 @@ export class PaymentController {
     }
   }
 
+  /**
+   * Diagnóstico da configuração da PaySuite (não expõe segredos).
+   */
+  static async configStatus(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const { getPaySuiteConfigStatus } = await import('./paysuite.service');
+      const status = await getPaySuiteConfigStatus();
+      return res.status(200).json({ payments: status });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Estado do modo sandbox (para o botão do painel admin).
+   */
+  static async getSandboxMode(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const { resolveSandboxState } = await import('../../lib/sandbox-payments');
+      const sandbox = await resolveSandboxState();
+      return res.status(200).json({ sandbox });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Liga/desliga o modo sandbox (apenas ADMIN, com auditoria).
+   */
+  static async setSandboxMode(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { enabled } = req.body || {};
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({
+          error: { code: 'INVALID_PAYLOAD', message: 'O campo "enabled" tem de ser true ou false.' }
+        });
+      }
+
+      const { setSandboxEnabled } = await import('../../lib/sandbox-payments');
+
+      let sandbox;
+      try {
+        sandbox = await setSandboxEnabled(enabled, req.user?.userId);
+      } catch {
+        throw new AppError(
+          'Não foi possível gravar a configuração. A tabela system_settings ainda não existe — corre `npm --workspace=apps/api run db:push`.',
+          500,
+          'SETTINGS_UNAVAILABLE'
+        );
+      }
+
+      const { AuditService } = await import('../audit/audit.service');
+      await AuditService.record({
+        actorUserId: req.user?.userId || null,
+        action: 'UPDATE',
+        entityType: 'SYSTEM_SETTING',
+        entityId: 'payments.sandbox',
+        reason: enabled
+          ? 'Modo sandbox dos pagamentos LIGADO (cobranças de teste).'
+          : 'Modo sandbox dos pagamentos DESLIGADO (cobranças reais).',
+        metadata: { enabled, amountMinorUnits: sandbox.amountMinorUnits }
+      });
+
+      return res.status(200).json({ sandbox });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async handlePaySuiteWebhook(req: Request, res: Response, next: NextFunction) {
     try {
       const { PaySuiteService, verifyPaySuiteWebhookSignature } = await import('./paysuite.service');
       const signature = req.headers['x-signature'] as string | undefined;
 
-      const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+      const rawBody =
+        (req as unknown as { rawBody?: string }).rawBody ||
+        (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
       const isValid = verifyPaySuiteWebhookSignature(rawBody, signature);
       if (!isValid) {
         return res.status(400).json({ error: { code: 'INVALID_SIGNATURE', message: 'Assinatura inválida do PaySuite.' } });
