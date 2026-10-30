@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Newspaper, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { UserRole } from '@vuka/shared';
 
@@ -143,9 +143,18 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <Link
+              to="/registar"
+              style={{ fontSize: '13px', color: '#34d399', fontWeight: 600, textDecoration: 'none' }}
+            >
+              O meu jornal ainda não tem conta — criar agora →
+            </Link>
+          </div>
+
           <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid var(--color-border)' }}>
             <p style={{ fontSize: '12px', color: 'var(--color-text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '10px' }}>
-              Editoras de Teste:
+              Jornais de demonstração:
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <button

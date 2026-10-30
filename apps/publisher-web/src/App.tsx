@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
 import { PublisherLayout } from './components/PublisherLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { PublicationsPage } from './pages/PublicationsPage';
@@ -23,6 +24,7 @@ export const App: React.FC = () => {
       <BrowserRouter basename="/editora">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/registar" element={<RegisterPage />} />
 
           <Route
             path="/"

@@ -417,3 +417,18 @@ model SystemSetting {
 
   @@map("system_settings")
 }
+
+/// Código de convite que autoriza a criação de um jornal (auto-registo).
+model PublisherInvite {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  note        String?
+  createdById String?
+  publisherId String?
+  usedAt      DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([usedAt])
+  @@map("publisher_invites")
+}

@@ -43,6 +43,74 @@ export class PublisherController {
     }
   }
 
+  /**
+   * Auto-registo público de um jornal (requer código de convite).
+   */
+  static async register(req: Request, res: Response, next: NextFunction) {
+    try {
+      const {
+        publisherName,
+        name,
+        slug,
+        contactEmail,
+        contactPhone,
+        adminName,
+        adminEmail,
+        email,
+        adminPhone,
+        phone,
+        password,
+        inviteCode
+      } = req.body || {};
+
+      const result = await PublisherService.registerPublisher({
+        publisherName: publisherName || name,
+        slug,
+        contactEmail,
+        contactPhone,
+        adminName,
+        adminEmail: adminEmail || email,
+        adminPhone: adminPhone || phone,
+        password,
+        inviteCode
+      });
+
+      return res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /* ---------------- Códigos de convite (ADMIN) ---------------- */
+
+  static async listInvites(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const invites = await PublisherService.listInvites();
+      return res.status(200).json({ invites });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async createInvite(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { note, expiresInDays } = req.body || {};
+      const invite = await PublisherService.createInvite(req.user!.userId, { note, expiresInDays });
+      return res.status(201).json({ invite });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async revokeInvite(req: Request, res: Response, next: NextFunction) {
+    try {
+      await PublisherService.revokeInvite(req.user!.userId, req.params.id);
+      return res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
       const publisher = await PublisherService.updatePublisher(req.user!.userId, req.params.id, req.body);

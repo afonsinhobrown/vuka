@@ -175,4 +175,20 @@ Com `PAYSUITE_SANDBOX=true` a API aceita a notificação **apenas quando o valor
 
 Diagnóstico sem expor segredos: `GET /api/v1/payments/config-status` (mostra `sandboxMode` e `sandboxFixedAmountMinorUnits`).
 
+---
+
+## 📰 Entrada de um novo jornal (auto-registo com convite)
+
+O administrador do sistema **não cria jornais**. O fluxo é:
+
+1. **Admin** → *Editoras / Jornais* → **Gerar convite** → obtém um código `VUKA-XXXX-XXXX` (1 uso).
+2. O código é enviado ao jornal.
+3. **Jornal** → `https://vuka-kappa.vercel.app/editora/registar` → cola o código e cria a conta (nome do jornal, responsável, email, password).
+4. A API cria numa única transação: `Publisher` + `User` (`PUBLISHER_ADMIN`) + `PublisherMember`, e consome o convite de forma atómica.
+
+Depois disso o jornal entra no portal, cria as publicações, carrega edições e define preços — sem intervenção do admin, que mantém apenas a fiscalização (suspender/reativar conta e anular convites por usar).
+
+Endpoints: `POST /api/v1/publishers/register` (público, exige `inviteCode`), `GET|POST /api/v1/publishers/invites`, `DELETE /api/v1/publishers/invites/:id` (ADMIN).
+
+
 

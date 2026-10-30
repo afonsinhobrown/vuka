@@ -1,31 +1,75 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { PublisherDTO } from '@vuka/shared';
-import { Building2, Plus, Phone, Mail, BookOpen, AlertCircle, X } from 'lucide-react';
+import {
+  Building2,
+  Phone,
+  Mail,
+  BookOpen,
+  AlertCircle,
+  Power,
+  KeyRound,
+  Copy,
+  Trash2,
+  Plus
+} from 'lucide-react';
+
+/**
+ * Fiscalização das editoras/jornais + gestão dos códigos de convite.
+ *
+ * Os jornais criam a própria conta em `/editora/registar`, mas só com um código
+ * de convite emitido aqui. O administrador não cria jornais.
+ */
+
+interface PublisherInvite {
+  id: string;
+  code: string;
+  note: string | null;
+  usedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  status: 'AVAILABLE' | 'USED' | 'EXPIRED';
+  publisherId: string | null;
+}
+
+const formatDate = (value: string | null) =>
+  value ? new Date(value).toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
 export const PublishersPage: React.FC = () => {
   const { authFetch } = useAuth();
   const [publishers, setPublishers] = useState<PublisherDTO[]>([]);
+  const [invites, setInvites] = useState<PublisherInvite[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [contactEmail, setContactEmail] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [inviteNote, setInviteNote] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [lastCode, setLastCode] = useState<string | null>(null);
+
   useEffect(() => {
-    loadPublishers();
+    loadAll();
   }, []);
 
-  const loadPublishers = async () => {
+  const loadAll = async () => {
     try {
       setLoading(true);
-      const res = await authFetch('/api/v1/publishers');
-      if (!res.ok) throw new Error('Falha ao obter editoras.');
-      const data = await res.json();
-      setPublishers(data.publishers);
+      const [publishersRes, invitesRes] = await Promise.all([
+        authFetch('/api/v1/publishers'),
+        authFetch('/api/v1/publishers/invites')
+      ]);
+
+      if (publishersRes.ok) {
+        const data = await publishersRes.json();
+        setPublishers(data.publishers || []);
+      } else {
+        throw new Error('Falha ao obter editoras.');
+      }
+
+      if (invitesRes.ok) {
+        const data = await invitesRes.json();
+        setInvites(data.invites || []);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -33,45 +77,83 @@ export const PublishersPage: React.FC = () => {
     }
   };
 
-  const handleCreatePublisher = async (e: React.FormEvent) => {
+  const generateInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setError(null);
     try {
-      const res = await authFetch('/api/v1/publishers', {
+      setGenerating(true);
+      setError(null);
+      const res = await authFetch('/api/v1/publishers/invites', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, slug, contactEmail, contactPhone })
+        body: JSON.stringify({ note: inviteNote || undefined })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Falha ao criar editora.');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message || 'Falha ao gerar convite.');
 
-      setShowModal(false);
-      setName('');
-      setSlug('');
-      setContactEmail('');
-      setContactPhone('');
-      await loadPublishers();
+      setLastCode(data.invite.code);
+      setInviteNote('');
+      await loadAll();
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setSaving(false);
+      setGenerating(false);
+    }
+  };
+
+  const revokeInvite = async (invite: PublisherInvite) => {
+    if (!confirm(`Anular o convite ${invite.code}?`)) return;
+    try {
+      setBusyId(invite.id);
+      const res = await authFetch(`/api/v1/publishers/invites/${invite.id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error?.message || 'Falha ao anular o convite.');
+      }
+      await loadAll();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const toggleStatus = async (publisher: PublisherDTO) => {
+    const isActive = publisher.status === 'ACTIVE';
+    const nextStatus = isActive ? 'SUSPENDED' : 'ACTIVE';
+    const confirmation = isActive
+      ? `Suspender "${publisher.name}"? Os gestores deixam de conseguir publicar e vender.`
+      : `Reativar "${publisher.name}"?`;
+    if (!confirm(confirmation)) return;
+
+    try {
+      setBusyId(publisher.id);
+      setError(null);
+      const res = await authFetch(`/api/v1/publishers/${publisher.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message || 'Falha ao alterar o estado da editora.');
+      await loadAll();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
     }
   };
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
-        <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Gestão de Editoras</h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '14px', marginTop: '4px' }}>
-            Empresas jornalísticas e editoras parceiras registadas na VUKA
-          </p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={18} />
-          <span>Registar Nova Editora</span>
-        </button>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Editoras / Jornais</h1>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '14px', marginTop: '4px' }}>
+          Cada jornal cria a sua conta em{' '}
+          <a href="/editora/registar" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>
+            /editora/registar
+          </a>{' '}
+          com um código de convite. Aqui emites os códigos e fiscalizas as contas.
+        </p>
       </div>
 
       {error && (
@@ -81,130 +163,201 @@ export const PublishersPage: React.FC = () => {
         </div>
       )}
 
+      {/* ---------- Convites ---------- */}
+      <div className="card" style={{ marginBottom: '20px' }}>
+        <h2 style={{ fontSize: '17px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <KeyRound size={18} /> Códigos de convite
+        </h2>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '6px' }}>
+          Cada código autoriza a criação de <strong>um</strong> jornal e fica marcado como usado.
+        </p>
+
+        <form onSubmit={generateInvite} style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            className="form-input"
+            value={inviteNote}
+            onChange={(e) => setInviteNote(e.target.value)}
+            placeholder="Nota (opcional): ex. Jornal de Maputo"
+            style={{ flex: '1 1 260px' }}
+          />
+          <button type="submit" className="btn btn-primary" disabled={generating}>
+            <Plus size={16} />
+            <span>{generating ? 'A gerar...' : 'Gerar convite'}</span>
+          </button>
+        </form>
+
+        {lastCode && (
+          <div
+            style={{
+              marginTop: '14px',
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-dim)', textTransform: 'uppercase' }}>
+                Convite criado — envia ao jornal
+              </div>
+              <div style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 700, letterSpacing: '1px' }}>
+                {lastCode}
+              </div>
+            </div>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => navigator.clipboard?.writeText(lastCode)}
+              type="button"
+            >
+              <Copy size={14} />
+              <span>Copiar</span>
+            </button>
+          </div>
+        )}
+
+        {invites.length > 0 && (
+          <div style={{ marginTop: '18px' }}>
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Nota</th>
+                    <th>Criado</th>
+                    <th>Expira</th>
+                    <th>Estado</th>
+                    <th style={{ textAlign: 'right' }}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invites.map((invite) => (
+                    <tr key={invite.id}>
+                      <td>
+                        <code style={{ fontSize: '12px' }}>{invite.code}</code>
+                      </td>
+                      <td style={{ fontSize: '13px' }}>{invite.note || '—'}</td>
+                      <td style={{ fontSize: '13px' }}>{formatDate(invite.createdAt)}</td>
+                      <td style={{ fontSize: '13px' }}>{formatDate(invite.expiresAt)}</td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            invite.status === 'AVAILABLE'
+                              ? 'badge-success'
+                              : invite.status === 'USED'
+                                ? 'badge-purple'
+                                : 'badge-danger'
+                          }`}
+                        >
+                          {invite.status === 'AVAILABLE' ? 'Disponível' : invite.status === 'USED' ? 'Usado' : 'Expirado'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {invite.status !== 'USED' && (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => revokeInvite(invite)}
+                            disabled={busyId === invite.id}
+                            style={{ color: 'var(--color-danger)' }}
+                          >
+                            <Trash2 size={14} />
+                            <span>Anular</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---------- Editoras ---------- */}
       {loading ? (
         <p style={{ color: 'var(--color-text-muted)' }}>A carregar editoras...</p>
+      ) : publishers.length === 0 ? (
+        <div className="card" style={{ color: 'var(--color-text-dim)', textAlign: 'center', padding: '40px 20px' }}>
+          Ainda não existe nenhuma editora registada. Gera um convite e envia-o ao jornal.
+        </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-container">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Nome da Editora</th>
-                  <th>Identificador (Slug)</th>
+                  <th>Nome do Jornal / Editora</th>
+                  <th>Identificador</th>
                   <th>Contactos</th>
-                  <th>Publicações Ativas</th>
+                  <th>Publicações</th>
                   <th>Estado</th>
+                  <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {publishers.map((pub) => (
-                  <tr key={pub.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'var(--color-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
-                          <Building2 size={16} />
+                {publishers.map((pub) => {
+                  const isActive = pub.status === 'ACTIVE';
+                  return (
+                    <tr key={pub.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'var(--color-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+                            <Building2 size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{pub.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>ID: {pub.id.slice(0, 8)}...</div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>{pub.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--color-text-dim)' }}>ID: {pub.id.slice(0, 8)}...</div>
+                      </td>
+                      <td>
+                        <code style={{ fontSize: '12px', padding: '2px 6px', background: 'var(--color-bg)', borderRadius: '4px' }}>{pub.slug}</code>
+                      </td>
+                      <td>
+                        <div style={{ fontSize: '13px' }}>
+                          {pub.contactEmail && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Mail size={12} color="var(--color-text-dim)" /> {pub.contactEmail}
+                            </div>
+                          )}
+                          {pub.contactPhone && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                              <Phone size={12} color="var(--color-text-dim)" /> {pub.contactPhone}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <code style={{ fontSize: '12px', padding: '2px 6px', background: 'var(--color-bg)', borderRadius: '4px' }}>{pub.slug}</code>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: '13px' }}>
-                        {pub.contactEmail && <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={12} color="var(--color-text-dim)" /> {pub.contactEmail}</div>}
-                        {pub.contactPhone && <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}><Phone size={12} color="var(--color-text-dim)" /> {pub.contactPhone}</div>}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-purple">
-                        <BookOpen size={12} /> {pub.publicationsCount || 0} títulos
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge badge-success">Ativa</span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        <span className="badge badge-purple">
+                          <BookOpen size={12} /> {pub.publicationsCount || 0} títulos
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${isActive ? 'badge-success' : 'badge-danger'}`}>
+                          {isActive ? 'Ativa' : 'Suspensa'}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => toggleStatus(pub)}
+                          disabled={busyId === pub.id}
+                          style={isActive ? { color: 'var(--color-danger)' } : undefined}
+                        >
+                          <Power size={14} />
+                          <span>{busyId === pub.id ? 'A guardar...' : isActive ? 'Suspender' : 'Reativar'}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Nova Editora */}
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card">
-            <div className="modal-header">
-              <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Registar Editora Parceira</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleCreatePublisher}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Nome da Empresa / Editora</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={name}
-                    onChange={(e) => {
-                      setName(e.target.value);
-                      if (!slug) {
-                        setSlug(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
-                      }
-                    }}
-                    placeholder="ex: Sociedade do Notícias, S.A."
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Slug / Identificador único no sistema</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    placeholder="ex: noticias-sa"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Email Comercial</label>
-                  <input
-                    type="email"
-                    className="form-input"
-                    value={contactEmail}
-                    onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="comercial@editora.co.mz"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Telefone de Contacto</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    placeholder="+258 21 000 000"
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'A guardar...' : 'Criar Editora'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
