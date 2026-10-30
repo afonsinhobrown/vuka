@@ -39,6 +39,30 @@ function webhookSecret(): string | null {
   return process.env.PAYSUITE_WEBHOOK_SECRET || null;
 }
 
+/**
+ * A PaySuite só aceita letras e números no campo `reference`
+ * (422 "The Reference field must only contain letters and numbers.").
+ * Enviamos `VUKA-56AF8E` como `VUKA56AF8E`.
+ */
+export function sanitizePaymentReference(reference: string): string {
+  return String(reference || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 50);
+}
+
+/**
+ * Repõe a forma canónica da referência (`VUKA-56AF8E` / `SUB-AB12CD`) quando o
+ * webhook a devolve sem separadores.
+ */
+export function normalizePaymentReference(reference: string): string {
+  const value = String(reference || '').trim();
+  if (/^VUKA-?[A-Za-z0-9]{6}$/i.test(value)) {
+    return `VUKA-${value.replace(/^VUKA-?/i, '').toUpperCase()}`;
+  }
+  if (/^SUB-?[A-Za-z0-9]{6}$/i.test(value)) {
+    return `SUB-${value.replace(/^SUB-?/i, '').toUpperCase()}`;
+  }
+  return value;
+}
+
 export type PaySuiteConfigStatus = {
   provider: 'paysuite';
   configured: boolean;
@@ -109,7 +133,7 @@ export async function createPaySuiteCharge(params: {
 
   const payload: Record<string, unknown> = {
     amount: amountMzn,
-    reference: params.reference.slice(0, 50),
+    reference: sanitizePaymentReference(params.reference),
     description: params.description.slice(0, 125)
   };
   if (contactId) payload.contact_id = contactId;
@@ -185,7 +209,15 @@ async function paysuiteRequest<T>(
       (parsed && typeof parsed.message === 'string' && parsed.message) ||
       (parsed && typeof parsed.error === 'string' && parsed.error) ||
       `PaySuite respondeu com estado ${response.status}`;
-    throw new PaySuiteApiError(detalhe ? `${message} (${detalhe})` : message, response.status);
+    const fullMessage = detalhe ? `${message} (${detalhe})` : message;
+
+    // Erros do gateway têm de chegar ao cliente com a mensagem real (não 500):
+    // 4xx = pedido recusado · 5xx = gateway indisponível
+    if (response.status >= 400 && response.status < 500) {
+      throw new AppError(`PaySuite recusou o pedido: ${fullMessage}`, 400, 'PAYSUITE_REJECTED');
+    }
+
+    throw new PaySuiteApiError(fullMessage, response.status);
   }
 
   return (parsed?.data ?? parsed ?? {}) as T;
@@ -336,7 +368,7 @@ export class PaySuiteService {
 
   const payload: Record<string, unknown> = {
     amount: amountMzn,
-    reference: order.publicReference.slice(0, 50),
+    reference: sanitizePaymentReference(order.publicReference),
     description: `VUKA ${order.publicReference}`.slice(0, 125)
   };
 
@@ -419,7 +451,8 @@ export class PaySuiteService {
     return await PaymentService.processWebhook({
       provider: PaymentProvider.PAYSUITE,
       externalEventId: externalId,
-      orderPublicReference: reference,
+      // A PaySuite devolve a referência sem separadores → repõe VUKA-XXXXXX
+      orderPublicReference: normalizePaymentReference(reference),
       providerReference: externalId,
       amountMinorUnits,
       currency: 'MZN',

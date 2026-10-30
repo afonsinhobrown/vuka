@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middlewares/error.middleware';
 import { AuditService } from '../audit/audit.service';
-import { createPaySuiteCharge } from '../payments/paysuite.service';
+import { createPaySuiteCharge, normalizePaymentReference } from '../payments/paysuite.service';
 import { resolveSandboxFixedAmount } from '../../lib/sandbox-payments';
 import { getPlan } from '../../lib/plans';
 
@@ -185,7 +185,8 @@ export class SubscriptionInvoiceService {
    */
   static async handlePaymentNotification(payload: any): Promise<boolean> {
     const data = payload?.data || payload || {};
-    const reference = String(data.reference || '');
+    // A PaySuite devolve a referência sem separadores (SUBAB12CD) → normalizar
+    const reference = normalizePaymentReference(String(data.reference || ''));
 
     if (!reference.startsWith('SUB-')) return false;
 
