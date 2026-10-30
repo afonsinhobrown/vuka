@@ -9,6 +9,7 @@ import {
   FileCheck2,
   LogOut,
   Building,
+  BadgeCheck,
   ExternalLink
 } from 'lucide-react';
 
@@ -56,6 +57,11 @@ export const PublisherLayout: React.FC = () => {
           <NavLink to="/audit" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <FileCheck2 size={18} />
             <span>Trilha de Auditoria</span>
+          </NavLink>
+
+          <NavLink to="/subscricao" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <BadgeCheck size={18} />
+            <span>Subscrição</span>
           </NavLink>
         </nav>
 

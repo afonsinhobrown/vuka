@@ -11,7 +11,9 @@ import {
   KeyRound,
   Copy,
   Trash2,
-  Plus
+  Plus,
+  BadgeCheck,
+  X
 } from 'lucide-react';
 
 /**
@@ -32,6 +34,45 @@ interface PublisherInvite {
   publisherId: string | null;
 }
 
+interface PlanInfo {
+  code: 'BASIC' | 'STANDARD' | 'PREMIUM';
+  name: string;
+  tagline: string;
+  priceMinorUnits: number;
+  maxPublications: number;
+  maxArticlesPerMonth: number | null;
+  maxSalesPerMonth: number | null;
+  highlights: string[];
+}
+
+interface SubscriptionOverview {
+  publisherId: string;
+  publisherName: string;
+  plan: PlanInfo;
+  status: 'ACTIVE' | 'PAST_DUE' | 'CANCELLED';
+  startedAt: string | null;
+  renewsAt: string | null;
+  overdue: boolean;
+  graceDays: number;
+  inGrace: boolean;
+  blocked: boolean;
+  usage: { publications: number; articlesThisMonth: number; salesThisMonth: number };
+}
+
+interface PublisherInvoiceRow {
+  id: string;
+  reference: string;
+  planName: string;
+  amountMinorUnits: number;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELLED';
+  periodStart: string;
+  periodEnd: string;
+  checkoutUrl: string | null;
+  paidAt: string | null;
+}
+
+const money = (minor: number) => `${(minor / 100).toLocaleString('pt-MZ', { minimumFractionDigits: 0 })} MT`;
+
 const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
@@ -46,6 +87,17 @@ export const PublishersPage: React.FC = () => {
   const [inviteNote, setInviteNote] = useState('');
   const [generating, setGenerating] = useState(false);
   const [lastCode, setLastCode] = useState<string | null>(null);
+
+  // Modal de plano/subscrição
+  const [planTarget, setPlanTarget] = useState<PublisherDTO | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionOverview | null>(null);
+  const [planCode, setPlanCode] = useState<'BASIC' | 'STANDARD' | 'PREMIUM'>('BASIC');
+  const [planStatus, setPlanStatus] = useState<'ACTIVE' | 'PAST_DUE' | 'CANCELLED'>('ACTIVE');
+  const [renewsAt, setRenewsAt] = useState('');
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [invoices, setInvoices] = useState<PublisherInvoiceRow[]>([]);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -114,6 +166,128 @@ export const PublishersPage: React.FC = () => {
       setError(err.message);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const openPlan = async (publisher: PublisherDTO) => {
+    try {
+      setPlanTarget(publisher);
+      setSubscription(null);
+
+      const [subRes, plansRes] = await Promise.all([
+        authFetch(`/api/v1/publishers/${publisher.id}/subscription`),
+        plans.length === 0 ? fetch('/api/v1/publishers/plans') : Promise.resolve(null)
+      ]);
+
+      if (plansRes && plansRes.ok) {
+        const data = await plansRes.json();
+        setPlans(data.plans || []);
+      }
+
+      if (!subRes.ok) {
+        const data = await subRes.json().catch(() => null);
+        throw new Error(data?.error?.message || 'Falha ao obter a subscrição.');
+      }
+
+      const data = await subRes.json();
+      const sub: SubscriptionOverview = data.subscription;
+      setSubscription(sub);
+      setPlanCode(sub.plan.code);
+      setPlanStatus(sub.status);
+      setRenewsAt(sub.renewsAt ? sub.renewsAt.slice(0, 10) : '');
+
+      const invoicesRes = await authFetch(`/api/v1/publishers/${publisher.id}/invoices`);
+      if (invoicesRes.ok) {
+        const invoicesData = await invoicesRes.json();
+        setInvoices(invoicesData.invoices || []);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
+  const refreshSubscription = async (publisherId: string) => {
+    const subRes = await authFetch(`/api/v1/publishers/${publisherId}/subscription`);
+    if (subRes.ok) {
+      const data = await subRes.json();
+      setSubscription(data.subscription);
+      setRenewsAt(data.subscription.renewsAt ? data.subscription.renewsAt.slice(0, 10) : '');
+      setPlanStatus(data.subscription.status);
+    }
+
+    const invoicesRes = await authFetch(`/api/v1/publishers/${publisherId}/invoices`);
+    if (invoicesRes.ok) {
+      const data = await invoicesRes.json();
+      setInvoices(data.invoices || []);
+    }
+  };
+
+  const chargeNow = async () => {
+    if (!planTarget) return;
+    try {
+      setInvoiceBusy(true);
+      setError(null);
+      const res = await authFetch(`/api/v1/publishers/${planTarget.id}/invoices`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message || 'Falha ao criar a factura.');
+
+      await refreshSubscription(planTarget.id);
+      if (!data?.invoice?.checkoutUrl) {
+        alert(
+          `Factura ${data?.invoice?.reference || ''} criada, mas sem link de pagamento da PaySuite. ` +
+            'Verifica as credenciais ou marca como paga manualmente.'
+        );
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setInvoiceBusy(false);
+    }
+  };
+
+  const markInvoicePaid = async (invoice: PublisherInvoiceRow) => {
+    if (!planTarget) return;
+    if (!confirm(`Marcar a factura ${invoice.reference} como paga? A subscrição será renovada até ${formatDate(invoice.periodEnd)}.`)) {
+      return;
+    }
+    try {
+      setInvoiceBusy(true);
+      setError(null);
+      const res = await authFetch(`/api/v1/publishers/invoices/${invoice.id}/mark-paid`, { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message || 'Falha ao marcar a factura como paga.');
+      await refreshSubscription(planTarget.id);
+      await loadAll();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setInvoiceBusy(false);
+    }
+  };
+
+  const savePlan = async () => {
+    if (!planTarget) return;
+    try {
+      setSavingPlan(true);
+      setError(null);
+      const res = await authFetch(`/api/v1/publishers/${planTarget.id}/subscription`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planCode,
+          status: planStatus,
+          renewsAt: renewsAt ? new Date(`${renewsAt}T12:00:00`).toISOString() : null
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message || 'Falha ao alterar o plano.');
+
+      setPlanTarget(null);
+      await loadAll();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -343,21 +517,210 @@ export const PublishersPage: React.FC = () => {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => toggleStatus(pub)}
-                          disabled={busyId === pub.id}
-                          style={isActive ? { color: 'var(--color-danger)' } : undefined}
-                        >
-                          <Power size={14} />
-                          <span>{busyId === pub.id ? 'A guardar...' : isActive ? 'Suspender' : 'Reativar'}</span>
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => openPlan(pub)}
+                          >
+                            <BadgeCheck size={14} />
+                            <span>Plano</span>
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => toggleStatus(pub)}
+                            disabled={busyId === pub.id}
+                            style={isActive ? { color: 'var(--color-danger)' } : undefined}
+                          >
+                            <Power size={14} />
+                            <span>{busyId === pub.id ? 'A guardar...' : isActive ? 'Suspender' : 'Reativar'}</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Modal de plano / subscrição ---------- */}
+      {planTarget && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: '640px' }}>
+            <div className="modal-header">
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Subscrição — {planTarget.name}</h2>
+                <p style={{ fontSize: '12px', color: 'var(--color-text-dim)', marginTop: '2px' }}>
+                  {subscription
+                    ? `Em uso: ${subscription.usage.publications} título(s) · ${subscription.usage.articlesThisMonth} artigo(s) · ${subscription.usage.salesThisMonth} venda(s) este mês`
+                    : 'A carregar...'}
+                </p>
+              </div>
+              <button
+                onClick={() => setPlanTarget(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <label className="form-label">Plano</label>
+              <div style={{ display: 'grid', gap: '10px', marginTop: '8px' }}>
+                {plans.map((plan) => {
+                  const selected = plan.code === planCode;
+                  return (
+                    <button
+                      key={plan.code}
+                      type="button"
+                      onClick={() => setPlanCode(plan.code)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '12px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        border: `1px solid ${selected ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                        backgroundColor: selected ? 'var(--color-primary-light)' : 'var(--color-surface)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '15px' }}>{plan.name}</strong>
+                        <span style={{ fontSize: '14px', fontWeight: 700 }}>{money(plan.priceMinorUnits)}/mês</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                        {plan.highlights.join(' · ')}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '18px' }}>
+                <div className="form-group">
+                  <label className="form-label">Estado</label>
+                  <select
+                    className="form-input"
+                    value={planStatus}
+                    onChange={(e) => setPlanStatus(e.target.value as any)}
+                  >
+                    <option value="ACTIVE">Ativo</option>
+                    <option value="PAST_DUE">Pagamento em atraso</option>
+                    <option value="CANCELLED">Cancelado</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Renova em</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={renewsAt}
+                    onChange={(e) => setRenewsAt(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Mensalidades */}
+              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--color-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '14px', fontWeight: 700 }}>Mensalidades</h3>
+                    <p style={{ fontSize: '12px', color: 'var(--color-text-dim)' }}>
+                      Criar factura gera também a cobrança na PaySuite (link M-Pesa/e-Mola).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={chargeNow}
+                    disabled={invoiceBusy}
+                  >
+                    <Plus size={14} />
+                    <span>{invoiceBusy ? 'A processar...' : 'Cobrar agora'}</span>
+                  </button>
+                </div>
+
+                {invoices.length === 0 ? (
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-dim)', marginTop: '10px' }}>
+                    Sem facturas emitidas.
+                  </p>
+                ) : (
+                  <div className="table-container" style={{ marginTop: '12px' }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Factura</th>
+                          <th>Valor</th>
+                          <th>Período</th>
+                          <th>Estado</th>
+                          <th style={{ textAlign: 'right' }}>Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoices.map((invoice) => (
+                          <tr key={invoice.id}>
+                            <td>
+                              <code style={{ fontSize: '11px' }}>{invoice.reference}</code>
+                            </td>
+                            <td style={{ fontSize: '12px', fontWeight: 600 }}>{money(invoice.amountMinorUnits)}</td>
+                            <td style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                              {formatDate(invoice.periodStart)} → {formatDate(invoice.periodEnd)}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  invoice.status === 'PAID'
+                                    ? 'badge-success'
+                                    : invoice.status === 'PENDING'
+                                      ? 'badge-warning'
+                                      : 'badge-danger'
+                                }`}
+                              >
+                                {invoice.status === 'PAID' ? 'Paga' : invoice.status === 'PENDING' ? 'Pendente' : invoice.status}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                {invoice.status === 'PENDING' && invoice.checkoutUrl && (
+                                  <a
+                                    href={invoice.checkoutUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                  >
+                                    Link
+                                  </a>
+                                )}
+                                {invoice.status === 'PENDING' && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => markInvoicePaid(invoice)}
+                                    disabled={invoiceBusy}
+                                  >
+                                    Marcar paga
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setPlanTarget(null)}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-primary" onClick={savePlan} disabled={savingPlan}>
+                {savingPlan ? 'A guardar...' : 'Guardar plano'}
+              </button>
+            </div>
           </div>
         </div>
       )}

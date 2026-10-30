@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middlewares/error.middleware';
 import { OrderStatus, OfferStatus, OrderDTO } from '@vuka/shared';
 import { AuditService } from '../audit/audit.service';
+import { SubscriptionService } from '../subscriptions/subscription.service';
 import crypto from 'crypto';
 
 function generatePublicReference(): string {
@@ -43,6 +44,11 @@ export class OrderService {
 
     if (!offer || offer.status !== OfferStatus.ACTIVE) {
       throw new AppError('Oferta não disponível ou inativa.', 404, 'OFFER_UNAVAILABLE');
+    }
+
+    // Limite de vendas do plano do jornal
+    if (offer.publisherId) {
+      await SubscriptionService.assertCanSell(offer.publisherId);
     }
 
     // Freeze snapshot of the offer

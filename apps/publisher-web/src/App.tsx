@@ -9,6 +9,7 @@ import { PublicationsPage } from './pages/PublicationsPage';
 import { OffersPage } from './pages/OffersPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { AuditPage } from './pages/AuditPage';
+import { SubscriptionPage } from './pages/SubscriptionPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { token } = useAuth();
@@ -39,6 +40,7 @@ export const App: React.FC = () => {
             <Route path="offers" element={<OffersPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="audit" element={<AuditPage />} />
+            <Route path="subscricao" element={<SubscriptionPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

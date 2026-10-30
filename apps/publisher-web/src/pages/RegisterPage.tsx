@@ -245,6 +245,10 @@ export const RegisterPage: React.FC = () => {
           </form>
 
           <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid var(--color-border)' }}>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-dim)', marginBottom: '10px' }}>
+              A conta começa no <strong>plano Basic (3.000 MT/mês)</strong>: 1 título, 30 artigos e 500 vendas
+              por mês. Pode fazer upgrade a qualquer momento.
+            </p>
             <Link
               to="/login"
               style={{

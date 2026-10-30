@@ -5,8 +5,10 @@ import {
   CreditCard,
   Database,
   Loader2,
+  RefreshCw,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  Receipt
 } from 'lucide-react';
 
 type SandboxSource = 'settings' | 'env';
@@ -46,6 +48,8 @@ export const SettingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runningRenewals, setRunningRenewals] = useState(false);
+  const [renewalResult, setRenewalResult] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -110,6 +114,28 @@ export const SettingsPage: React.FC = () => {
       alert(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const runRenewals = async () => {
+    if (!confirm('Correr a rotina de renovação agora? Serão emitidas facturas para os jornais com renovação vencida.')) {
+      return;
+    }
+    try {
+      setRunningRenewals(true);
+      setRenewalResult(null);
+      const res = await authFetch('/api/v1/publishers/subscriptions/run-renewals');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error?.message || 'Falha ao correr a renovação.');
+
+      const renewals = data?.renewals || {};
+      setRenewalResult(
+        `${renewals.processed ?? 0} jornal(is) em renovação · ${renewals.created?.length ?? 0} factura(s) emitida(s) · ${renewals.skipped ?? 0} ignorado(s)`
+      );
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setRunningRenewals(false);
     }
   };
 
@@ -232,6 +258,29 @@ export const SettingsPage: React.FC = () => {
                 <strong>Falta configurar:</strong> {payments.missing.join(', ')}
               </div>
             )}
+          </div>
+
+          {/* ---------- Renovações ---------- */}
+          <div className="card">
+            <h2 style={{ fontSize: '17px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Receipt size={18} /> Renovações de subscrição
+            </h2>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', marginTop: '6px' }}>
+              Emite a factura mensal dos jornais cuja renovação já venceu e ainda não têm factura pendente.
+              Também pode ser chamada por um cron da Vercel em{' '}
+              <code>/api/v1/publishers/subscriptions/run-renewals</code> com o header{' '}
+              <code>Authorization: Bearer $CRON_SECRET</code>.
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary btn-sm" onClick={runRenewals} disabled={runningRenewals}>
+                <RefreshCw size={14} />
+                <span>{runningRenewals ? 'A processar...' : 'Correr renovações agora'}</span>
+              </button>
+              {renewalResult && (
+                <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>{renewalResult}</span>
+              )}
+            </div>
           </div>
 
           {/* ---------- Storage ---------- */}

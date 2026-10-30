@@ -1,8 +1,132 @@
 import { Request, Response, NextFunction } from 'express';
 import { PublisherService } from './publisher.service';
+import { SubscriptionService, SubscriptionStatus } from '../subscriptions/subscription.service';
+import { SubscriptionInvoiceService } from '../subscriptions/invoice.service';
 import { UserRole } from '@vuka/shared';
 
 export class PublisherController {
+  /* ---------------- Facturas de subscrição ---------------- */
+
+  /** Facturas do próprio jornal. */
+  static async listMyInvoices(req: Request, res: Response, next: NextFunction) {
+    try {
+      const publisherId = req.user?.publisherId;
+      if (!publisherId) {
+        return res.status(403).json({
+          error: { code: 'NO_PUBLISHER', message: 'Utilizador sem editora associada.' }
+        });
+      }
+      const invoices = await SubscriptionInvoiceService.list(publisherId);
+      return res.status(200).json({ invoices });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async listInvoices(req: Request, res: Response, next: NextFunction) {
+    try {
+      const invoices = await SubscriptionInvoiceService.list(req.params.id);
+      return res.status(200).json({ invoices });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Cria a factura do próximo ciclo e pede a cobrança à PaySuite (ADMIN). */
+  static async createInvoice(req: Request, res: Response, next: NextFunction) {
+    try {
+      const invoice = await SubscriptionInvoiceService.create(req.params.id, req.user!.userId);
+      return res.status(201).json({ invoice });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Marca a factura como paga (pagamento por fora / confirmação manual). */
+  static async markInvoicePaid(req: Request, res: Response, next: NextFunction) {
+    try {
+      const invoice = await SubscriptionInvoiceService.markPaid(req.params.id, req.user!.userId);
+      return res.status(200).json({ invoice });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Rotina de renovação (cron diário ou admin): cria factura para os jornais
+   * cuja renovação venceu e ainda não têm factura pendente.
+   */
+  static async runRenewals(req: Request, res: Response, next: NextFunction) {
+    try {
+      const cronSecret = process.env.CRON_SECRET;
+      const authorization = req.headers.authorization || '';
+      const isCron = Boolean(cronSecret) && authorization === `Bearer ${cronSecret}`;
+      const isAdmin = req.user?.role === UserRole.ADMIN;
+
+      if (!isCron && !isAdmin) {
+        return res.status(403).json({
+          error: { code: 'FORBIDDEN', message: 'Rotina de renovação restrita ao cron ou ao administrador.' }
+        });
+      }
+
+      const result = await SubscriptionInvoiceService.runRenewals();
+      return res.status(200).json({ renewals: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Tabela de preços (público). */
+  static async listPlans(_req: Request, res: Response, next: NextFunction) {
+    try {
+      return res.status(200).json({ plans: SubscriptionService.listPlans() });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Plano + consumo do próprio jornal. */
+  static async getMySubscription(req: Request, res: Response, next: NextFunction) {
+    try {
+      const publisherId = req.user?.publisherId;
+      if (!publisherId) {
+        return res.status(403).json({
+          error: { code: 'NO_PUBLISHER', message: 'Utilizador sem editora associada.' }
+        });
+      }
+
+      const subscription = await SubscriptionService.getOverview(publisherId);
+      return res.status(200).json({ subscription });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Subscrição de uma editora (ADMIN). */
+  static async getSubscription(req: Request, res: Response, next: NextFunction) {
+    try {
+      const subscription = await SubscriptionService.getOverview(req.params.id);
+      return res.status(200).json({ subscription });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** Alterar plano / estado / renovação (ADMIN). */
+  static async updateSubscription(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { planCode, status, renewsAt } = req.body || {};
+      const subscription = await SubscriptionService.changePlan(req.user!.userId, req.params.id, {
+        planCode,
+        status: status as SubscriptionStatus,
+        renewsAt
+      });
+      return res.status(200).json({ subscription });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async list(req: Request, res: Response, next: NextFunction) {
     try {
       const publishers = await PublisherService.listPublishers(req.user?.role, req.user?.publisherId);

@@ -190,5 +190,36 @@ Depois disso o jornal entra no portal, cria as publicações, carrega edições 
 
 Endpoints: `POST /api/v1/publishers/register` (público, exige `inviteCode`), `GET|POST /api/v1/publishers/invites`, `DELETE /api/v1/publishers/invites/:id` (ADMIN).
 
+---
+
+## 💳 Planos de subscrição dos jornais
+
+| Plano | Preço/mês | Títulos | Artigos/mês | Vendas/mês |
+| :--- | ---: | ---: | ---: | ---: |
+| **Basic** | 3.000 MT | 1 | 30 | 500 |
+| **Standard** | 5.000 MT | 3 | 120 | 2.000 |
+| **Premium** | 7.000 MT | 10 | ilimitado | 10.000 |
+
+Os limites são definidos em [plans.ts](apps/api/src/lib/plans.ts) (fonte única de verdade) e aplicados no servidor:
+
+- **criar título** → `PLAN_LIMIT_PUBLICATIONS` ([catalog.service.ts](apps/api/src/modules/catalog/catalog.service.ts))
+- **publicar artigo** → `PLAN_LIMIT_ARTICLES` ([articles.service.ts](apps/api/src/modules/articles/articles.service.ts))
+- **criar pedido/venda** → `PLAN_LIMIT_SALES` ([order.service.ts](apps/api/src/modules/orders/order.service.ts))
+- subscrição inativa ou renovação em atraso → `SUBSCRIPTION_INACTIVE` / `SUBSCRIPTION_OVERDUE`
+
+Um jornal novo entra no **Basic**. O administrador altera o plano, o estado e a data de renovação em *Editoras / Jornais → Plano*; o jornal vê o seu plano e o consumo do mês em *Subscrição*, dentro do portal.
+
+A PaySuite não tem cobrança recorrente (só `createPayment`/`getPayment`), por isso a mensalidade é emitida por nós como **factura** — por botão no admin ou pela rotina diária de renovação.
+
+### Mensalidades (facturas)
+
+- `PublisherInvoice` (`publisher_invoices`): referência `SUB-XXXXXX`, plano, valor, período, estado (`PENDING | PAID | FAILED | CANCELLED`), `providerReference`, `checkoutUrl`.
+- **Admin → Editoras → Plano → Cobrar agora** cria a factura do ciclo e pede a cobrança à PaySuite (link M-Pesa/e-Mola guardado em `checkoutUrl`). **Marcar paga** renova a subscrição até ao fim do período.
+- **Webhook**: notificações com referência `SUB-` são encaminhadas para a factura (não para pedidos) e validam o valor recebido — aceitando o valor fixo quando o modo sandbox está ligado.
+- **Rotina de renovação**: `GET /api/v1/publishers/subscriptions/run-renewals` (admin autenticado ou `Authorization: Bearer $CRON_SECRET`) emite facturas para os jornais com renovação vencida e sem factura pendente. Pode ser chamada por Vercel Cron, ou manualmente em *Configurações → Renovações*.
+- **Carência**: `SUBSCRIPTION_GRACE_DAYS` (por omissão `5`). Durante a carência o jornal continua a publicar/vender com aviso no portal; depois disso é bloqueado (`SUBSCRIPTION_OVERDUE`).
+
+
+
 
 

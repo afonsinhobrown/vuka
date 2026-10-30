@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { ArticleStatus, PaywallType } from '@vuka/shared';
 import { AppError } from '../../middlewares/error.middleware';
 import { AuditService } from '../audit/audit.service';
+import { SubscriptionService } from '../subscriptions/subscription.service';
 import { v4 as uuidv4 } from 'uuid';
 
 function slugify(input: string): string {
@@ -167,6 +168,14 @@ export class ArticlesService {
   }
 
   static async publish(id: string, actorUserId?: string) {
+    const existing = await prisma.article.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError('Artigo não encontrado.', 404, 'ARTICLE_NOT_FOUND');
+    }
+
+    // Limite do plano (artigos publicados por mês)
+    await SubscriptionService.assertCanPublishArticle(existing.publisherId);
+
     const article = await prisma.article.update({
       where: { id },
       data: {

@@ -123,6 +123,13 @@ export class PaymentController {
         return res.status(400).json({ error: { code: 'INVALID_SIGNATURE', message: 'Assinatura inválida do PaySuite.' } });
       }
 
+      // Notificações de facturas de subscrição (SUB-XXXXXX) são tratadas à parte
+      const { SubscriptionInvoiceService } = await import('../subscriptions/invoice.service');
+      const wasInvoice = await SubscriptionInvoiceService.handlePaymentNotification(req.body);
+      if (wasInvoice) {
+        return res.status(200).json({ received: true, type: 'SUBSCRIPTION_INVOICE' });
+      }
+
       const result = await PaySuiteService.processWebhook(req.body);
       return res.status(200).json({ received: true, data: result });
     } catch (error) {

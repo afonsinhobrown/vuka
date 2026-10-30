@@ -9,6 +9,7 @@ import {
   UserRole
 } from '@vuka/shared';
 import { AuditService } from '../audit/audit.service';
+import { SubscriptionService } from '../subscriptions/subscription.service';
 import fs from 'fs';
 import path from 'path';
 
@@ -190,6 +191,9 @@ export class CatalogService {
     publisherId: string,
     data: { title: string; slug: string; description?: string; coverAssetId?: string }
   ): Promise<PublicationDTO> {
+    // Limite do plano de subscrição (títulos por editora)
+    await SubscriptionService.assertCanCreatePublication(publisherId);
+
     const pub = await prisma.publication.create({
       data: {
         publisherId,

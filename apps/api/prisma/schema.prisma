@@ -137,6 +137,13 @@ model Publisher {
   contactEmail String?
   contactPhone String?
   status       PublisherStatus @default(ACTIVE)
+
+  /// Plano de subscrição (BASIC | STANDARD | PREMIUM) e respectivo estado.
+  planCode             String    @default("BASIC")
+  subscriptionStatus   String    @default("ACTIVE") // ACTIVE | PAST_DUE | CANCELLED
+  subscriptionStartedAt DateTime @default(now())
+  subscriptionRenewsAt DateTime?
+
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -146,8 +153,33 @@ model Publisher {
   auditEvents  AuditEvent[]
   sections     Section[]
   articles     Article[]
+  invoices     PublisherInvoice[]
 
   @@map("publishers")
+}
+
+/// Factura mensal da subscrição de um jornal (paga pela editora à VUKA).
+model PublisherInvoice {
+  id                String    @id @default(uuid())
+  reference         String    @unique
+  publisherId       String
+  planCode          String
+  amountMinorUnits  Int
+  currency          String    @default("MZN")
+  status            String    @default("PENDING") // PENDING | PAID | FAILED | CANCELLED
+  periodStart       DateTime
+  periodEnd         DateTime
+  providerReference String?
+  checkoutUrl       String?
+  paidAt            DateTime?
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  publisher Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+
+  @@index([publisherId, status])
+  @@map("publisher_invoices")
 }
 
 model PublisherMember {

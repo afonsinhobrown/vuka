@@ -89,6 +89,49 @@ export async function getPaySuiteConfigStatus(): Promise<PaySuiteConfigStatus> {
   };
 }
 
+/**
+ * Cobrança genérica (usada pelas facturas de subscrição dos jornais).
+ * Devolve o id/checkout da PaySuite.
+ */
+export async function createPaySuiteCharge(params: {
+  amountMinorUnits: number;
+  reference: string;
+  description: string;
+  phoneNumber?: string | null;
+  returnUrl?: string;
+}): Promise<{ id: string; status: string; checkoutUrl?: string; reference: string }> {
+  const amountMzn = Number((params.amountMinorUnits / 100).toFixed(2));
+
+  let contactId: string | null = null;
+  if (params.phoneNumber) {
+    contactId = await PaySuiteService.findOrCreateContact({ phone: params.phoneNumber });
+  }
+
+  const payload: Record<string, unknown> = {
+    amount: amountMzn,
+    reference: params.reference.slice(0, 50),
+    description: params.description.slice(0, 125)
+  };
+  if (contactId) payload.contact_id = contactId;
+  if (params.returnUrl) payload.return_url = params.returnUrl;
+
+  const baseApiUrl = (process.env.BASE_URL || 'http://localhost:4000').replace(/\/+$/, '');
+  payload.webhook_url = `${baseApiUrl}/api/v1/payments/webhook/paysuite`;
+
+  const charge = await paysuiteRequest<Record<string, unknown>>('/payments', {
+    method: 'POST',
+    body: payload
+  });
+
+  return {
+    id: String(charge.id ?? ''),
+    status: String(charge.status || 'pending').toLowerCase(),
+    reference: String(charge.reference || params.reference),
+    checkoutUrl:
+      typeof charge.checkout_url === 'string' && charge.checkout_url ? charge.checkout_url : undefined
+  };
+}
+
 export function normalizarTelefoneE164(telefone: string | number | null | undefined): string | null {
   let digitos = String(telefone ?? '').replace(/\D/g, '');
   if (digitos.startsWith(CODIGO_PAIS) && digitos.length === 12) {
