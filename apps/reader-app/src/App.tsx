@@ -5,6 +5,7 @@ import { ReaderLoginPage } from './pages/ReaderLoginPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { ReaderPage } from './pages/ReaderPage';
 import { CatalogStorePage } from './pages/CatalogStorePage';
+import { LandingPage } from './pages/LandingPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { token } = useReaderAuth();
@@ -19,6 +20,7 @@ export const App: React.FC = () => {
     <ReaderAuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<ReaderLoginPage />} />
 
           <Route
@@ -41,7 +43,7 @@ export const App: React.FC = () => {
 
           <Route path="/store" element={<CatalogStorePage />} />
 
-          <Route path="*" element={<Navigate to="/library" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </ReaderAuthProvider>
