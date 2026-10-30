@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "storage:upload-seed": "tsx scripts/upload-seed-assets.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",
