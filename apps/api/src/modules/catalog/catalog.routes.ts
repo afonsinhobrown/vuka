@@ -31,6 +31,14 @@ const router = Router();
 router.get('/', CatalogController.getPublicCatalog);
 router.get('/publications/:id', optionalAuthenticate, CatalogController.getPublicationById);
 
+// Protected management endpoints (isolated by publisher)
+router.get(
+  '/manage/publications',
+  authenticate,
+  requireRole(UserRole.ADMIN, UserRole.PUBLISHER_ADMIN, UserRole.PUBLISHER_EDITOR),
+  CatalogController.getManageableCatalog
+);
+
 // Protected endpoints for editors and admins
 router.post(
   '/publications',

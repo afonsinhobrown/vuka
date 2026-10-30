@@ -75,6 +75,67 @@ export class CatalogService {
     }));
   }
 
+  /**
+   * Catálogo de gestão: todas as publicações de uma editora (ou globais para admin),
+   * incluindo edições em rascunho e ofertas.
+   */
+  static async getPublisherCatalog(publisherId?: string | null) {
+    const publications = await prisma.publication.findMany({
+      where: publisherId ? { publisherId } : {},
+      include: {
+        publisher: { select: { id: true, name: true } },
+        editions: { orderBy: { editionDate: 'desc' } },
+        offers: { orderBy: { createdAt: 'desc' } }
+      },
+      orderBy: { title: 'asc' }
+    });
+
+    return publications.map((p: any) => ({
+      id: p.id,
+      publisherId: p.publisherId,
+      publisherName: p.publisher.name,
+      title: p.title,
+      slug: p.slug,
+      description: p.description,
+      coverAssetId: p.coverAssetId,
+      coverUrl: p.coverAssetId ? `/api/v1/assets/${p.coverAssetId}` : null,
+      status: p.status,
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      editions: p.editions.map((e: any) => ({
+        id: e.id,
+        publicationId: e.publicationId,
+        title: e.title,
+        editionDate: e.editionDate.toISOString().split('T')[0],
+        contentAssetId: e.contentAssetId,
+        coverAssetId: e.coverAssetId,
+        coverUrl: e.coverAssetId ? `/api/v1/assets/${e.coverAssetId}` : null,
+        status: e.status,
+        publishedAt: e.publishedAt ? e.publishedAt.toISOString() : null,
+        createdAt: e.createdAt.toISOString()
+      })),
+      offers: p.offers.map((o: any) => ({
+        id: o.id,
+        type: o.type,
+        title: o.title,
+        priceMinorUnits: o.priceMinorUnits,
+        currency: o.currency,
+        validityDays: o.validityDays,
+        status: o.status
+      }))
+    }));
+  }
+
+  private static assertPublisherAccess(
+    entityPublisherId: string,
+    userPublisherId?: string | null,
+    isAdmin = false
+  ) {
+    if (!isAdmin && entityPublisherId !== userPublisherId) {
+      throw new AppError('Acesso negado: este recurso pertence a outra editora.', 403, 'FORBIDDEN');
+    }
+  }
+
   static async getPublicationById(id: string, includeDrafts = false, userPublisherId?: string | null) {
     const publication = await prisma.publication.findUnique({
       where: { id },
@@ -168,10 +229,13 @@ export class CatalogService {
   static async updatePublication(
     actorUserId: string,
     id: string,
-    data: { title?: string; description?: string; coverAssetId?: string; status?: PublicationStatus }
+    data: { title?: string; description?: string; coverAssetId?: string; status?: PublicationStatus },
+    userPublisherId?: string | null,
+    isAdmin = false
   ) {
     const pub = await prisma.publication.findUnique({ where: { id } });
     if (!pub) throw new AppError('Publicação não encontrada.', 404, 'NOT_FOUND');
+    this.assertPublisherAccess(pub.publisherId, userPublisherId, isAdmin);
 
     const updated = await prisma.publication.update({
       where: { id },
@@ -203,10 +267,13 @@ export class CatalogService {
       editionDate: string; // YYYY-MM-DD
       contentAssetId: string;
       coverAssetId?: string;
-    }
+    },
+    userPublisherId?: string | null,
+    isAdmin = false
   ): Promise<EditionDTO> {
     const publication = await prisma.publication.findUnique({ where: { id: publicationId } });
     if (!publication) throw new AppError('Publicação não encontrada.', 404, 'NOT_FOUND');
+    this.assertPublisherAccess(publication.publisherId, userPublisherId, isAdmin);
 
     const edition = await prisma.edition.create({
       data: {
@@ -247,13 +314,19 @@ export class CatalogService {
     };
   }
 
-  static async publishEdition(actorUserId: string, editionId: string) {
+  static async publishEdition(
+    actorUserId: string,
+    editionId: string,
+    userPublisherId?: string | null,
+    isAdmin = false
+  ) {
     const edition = await prisma.edition.findUnique({
       where: { id: editionId },
       include: { publication: true }
     });
 
     if (!edition) throw new AppError('Edição não encontrada.', 404, 'NOT_FOUND');
+    this.assertPublisherAccess(edition.publication.publisherId, userPublisherId, isAdmin);
 
     const updated = await prisma.edition.update({
       where: { id: editionId },
@@ -275,13 +348,20 @@ export class CatalogService {
     return updated;
   }
 
-  static async withdrawEdition(actorUserId: string, editionId: string, reason: string) {
+  static async withdrawEdition(
+    actorUserId: string,
+    editionId: string,
+    reason: string,
+    userPublisherId?: string | null,
+    isAdmin = false
+  ) {
     const edition = await prisma.edition.findUnique({
       where: { id: editionId },
       include: { publication: true }
     });
 
     if (!edition) throw new AppError('Edição não encontrada.', 404, 'NOT_FOUND');
+    this.assertPublisherAccess(edition.publication.publisherId, userPublisherId, isAdmin);
 
     const updated = await prisma.edition.update({
       where: { id: editionId },

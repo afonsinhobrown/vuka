@@ -1,14 +1,51 @@
 {
   "services": {
-    "admin-web": {
-      "root": "apps/admin-web"
-    },
-    "reader-app": {
-      "root": "apps/reader-app"
-    },
     "api": {
       "root": "apps/api",
       "entrypoint": "src/server.ts"
+    },
+    "admin-web": {
+      "root": "apps/admin-web",
+      "rewrites": [
+        {
+          "source": "/admin/assets/(.*)",
+          "destination": "/assets/$1"
+        },
+        {
+          "source": "/admin",
+          "destination": "/index.html"
+        },
+        {
+          "source": "/admin/(.*)",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    "publisher-web": {
+      "root": "apps/publisher-web",
+      "rewrites": [
+        {
+          "source": "/editora/assets/(.*)",
+          "destination": "/assets/$1"
+        },
+        {
+          "source": "/editora",
+          "destination": "/index.html"
+        },
+        {
+          "source": "/editora/(.*)",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    "reader-app": {
+      "root": "apps/reader-app",
+      "rewrites": [
+        {
+          "source": "/(.*)",
+          "destination": "/index.html"
+        }
+      ]
     }
   },
   "rewrites": [
@@ -19,38 +56,33 @@
       }
     },
     {
-      "source": "/admin/assets/(.*)",
-      "destination": {
-        "service": "admin-web",
-        "path": "/assets/$1"
-      }
-    },
-    {
       "source": "/admin",
       "destination": {
-        "service": "admin-web",
-        "path": "/index.html"
+        "service": "admin-web"
       }
     },
     {
       "source": "/admin/(.*)",
       "destination": {
-        "service": "admin-web",
-        "path": "/index.html"
+        "service": "admin-web"
       }
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/editora",
       "destination": {
-        "service": "reader-app",
-        "path": "/assets/$1"
+        "service": "publisher-web"
+      }
+    },
+    {
+      "source": "/editora/(.*)",
+      "destination": {
+        "service": "publisher-web"
       }
     },
     {
       "source": "/(.*)",
       "destination": {
-        "service": "reader-app",
-        "path": "/index.html"
+        "service": "reader-app"
       }
     }
   ]

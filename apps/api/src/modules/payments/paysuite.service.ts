@@ -259,7 +259,7 @@ export class PaySuiteService {
     body: payload
   });
 
-  chargeResult = {
+  const chargeResult: PaySuiteChargeResult = {
     id: String(charge.id ?? ''),
     status: String(charge.status || 'pending').toLowerCase(),
     amount: toNumber(charge.amount, amountMzn),

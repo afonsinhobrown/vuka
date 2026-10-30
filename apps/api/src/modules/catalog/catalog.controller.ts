@@ -13,6 +13,26 @@ export class CatalogController {
     }
   }
 
+  static async getManageableCatalog(req: Request, res: Response, next: NextFunction) {
+    try {
+      const targetPublisherId =
+        req.user?.role === UserRole.ADMIN
+          ? ((req.query.publisherId as string) || null)
+          : req.user?.publisherId;
+
+      if (req.user?.role !== UserRole.ADMIN && !targetPublisherId) {
+        return res.status(403).json({
+          error: { code: 'NO_PUBLISHER', message: 'Utilizador sem editora associada.' }
+        });
+      }
+
+      const catalog = await CatalogService.getPublisherCatalog(targetPublisherId);
+      return res.status(200).json({ catalog });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   static async getPublicationById(req: Request, res: Response, next: NextFunction) {
     try {
       const includeDrafts = req.query.includeDrafts === 'true';
@@ -53,7 +73,13 @@ export class CatalogController {
 
   static async updatePublication(req: Request, res: Response, next: NextFunction) {
     try {
-      const publication = await CatalogService.updatePublication(req.user!.userId, req.params.id, req.body);
+      const publication = await CatalogService.updatePublication(
+        req.user!.userId,
+        req.params.id,
+        req.body,
+        req.user?.publisherId,
+        req.user?.role === UserRole.ADMIN
+      );
       return res.status(200).json({ publication });
     } catch (error) {
       next(error);
@@ -69,12 +95,18 @@ export class CatalogController {
         });
       }
 
-      const edition = await CatalogService.createEdition(req.user!.userId, publicationId, {
-        title,
-        editionDate,
-        contentAssetId,
-        coverAssetId
-      });
+      const edition = await CatalogService.createEdition(
+        req.user!.userId,
+        publicationId,
+        {
+          title,
+          editionDate,
+          contentAssetId,
+          coverAssetId
+        },
+        req.user?.publisherId,
+        req.user?.role === UserRole.ADMIN
+      );
 
       return res.status(201).json({ edition });
     } catch (error) {
@@ -84,7 +116,12 @@ export class CatalogController {
 
   static async publishEdition(req: Request, res: Response, next: NextFunction) {
     try {
-      const edition = await CatalogService.publishEdition(req.user!.userId, req.params.id);
+      const edition = await CatalogService.publishEdition(
+        req.user!.userId,
+        req.params.id,
+        req.user?.publisherId,
+        req.user?.role === UserRole.ADMIN
+      );
       return res.status(200).json({ edition });
     } catch (error) {
       next(error);
@@ -94,7 +131,13 @@ export class CatalogController {
   static async withdrawEdition(req: Request, res: Response, next: NextFunction) {
     try {
       const { reason } = req.body;
-      const edition = await CatalogService.withdrawEdition(req.user!.userId, req.params.id, reason);
+      const edition = await CatalogService.withdrawEdition(
+        req.user!.userId,
+        req.params.id,
+        reason,
+        req.user?.publisherId,
+        req.user?.role === UserRole.ADMIN
+      );
       return res.status(200).json({ edition });
     } catch (error) {
       next(error);

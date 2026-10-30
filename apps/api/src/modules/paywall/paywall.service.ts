@@ -1,4 +1,4 @@
-import { prisma } from '../lib/prisma';
+import { prisma } from '../../lib/prisma';
 import { EntitlementStatus, ArticleStatus, PaywallType } from '@vuka/shared';
 
 export type PaywallResult =

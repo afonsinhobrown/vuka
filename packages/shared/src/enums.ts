@@ -74,6 +74,18 @@ export enum EntitlementStatus {
   REFUNDED = 'REFUNDED'
 }
 
+export enum ArticleStatus {
+  DRAFT = 'DRAFT',
+  SCHEDULED = 'SCHEDULED',
+  PUBLISHED = 'PUBLISHED',
+  WITHDRAWN = 'WITHDRAWN'
+}
+
+export enum PaywallType {
+  HARD = 'HARD',
+  METERED = 'METERED'
+}
+
 export enum AssetVisibility {
   PUBLIC = 'PUBLIC',
   PRIVATE = 'PRIVATE'

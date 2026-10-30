@@ -24,6 +24,17 @@ export class OfferController {
   static async getById(req: Request, res: Response, next: NextFunction) {
     try {
       const offer = await OfferService.getOfferById(req.params.id);
+
+      if (
+        req.user &&
+        req.user.role !== UserRole.ADMIN &&
+        offer.publisherId !== req.user.publisherId
+      ) {
+        return res.status(403).json({
+          error: { code: 'FORBIDDEN', message: 'Acesso negado a esta oferta.' }
+        });
+      }
+
       return res.status(200).json({ offer });
     } catch (error) {
       next(error);
@@ -63,7 +74,13 @@ export class OfferController {
 
   static async update(req: Request, res: Response, next: NextFunction) {
     try {
-      const offer = await OfferService.updateOffer(req.user!.userId, req.params.id, req.body);
+      const offer = await OfferService.updateOffer(
+        req.user!.userId,
+        req.params.id,
+        req.body,
+        req.user?.publisherId,
+        req.user?.role === UserRole.ADMIN
+      );
       return res.status(200).json({ offer });
     } catch (error) {
       next(error);

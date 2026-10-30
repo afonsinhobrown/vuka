@@ -15,6 +15,7 @@ vuka/
 ├── apps/
 │   ├── api/                    # Backend REST em Node.js / TypeScript com Prisma ORM e Neon PostgreSQL
 │   ├── admin-web/              # Painel Administrativo Web (React + Vite, porta 5174)
+│   ├── publisher-web/          # Portal da Editora / Criador do Jornal (React + Vite, porta 5175)
 │   └── reader-app/             # Aplicação do Leitor (Mobile-first / PWA, porta 5173) com leitor PDF protegido
 ├── docs/                       # Especificações de requisitos e arquitetura técnica
 └── README.md
@@ -37,8 +38,8 @@ vuka/
 | Perfil | Identificador / Email | Palavra-passe | Permissões |
 | :--- | :--- | :--- | :--- |
 | **Administrador Global** | `admin@vuka.co.mz` | `admin123` | Controlo total, gestão de editoras, catálogo global, auditoria e relatórios |
-| **Gestor Editorial (Notícias)** | `gestor@noticias.co.mz` | `editora123` | Gestão restrita da Sociedade do Notícias (Jornal Notícias e Domingo) |
-| **Gestor Editorial (Mediacoop)** | `gestor@mediacoop.co.mz` | `editora123` | Gestão restrita do Semanário Savana |
+| **Gestor Editorial (Notícias)** | `gestor@noticias.co.mz` | `editora123` | Portal da Editora: gestão restrita da Sociedade do Notícias (Jornal Notícias e Domingo) |
+| **Gestor Editorial (Mediacoop)** | `gestor@mediacoop.co.mz` | `editora123` | Portal da Editora: gestão restrita do Semanário Savana |
 | **Leitor Piloto** | `258841234567` | `leitor123` | Acesso à biblioteca pessoal (já com Jornal Notícias ativo) |
 
 ---
@@ -72,6 +73,9 @@ npm run dev:api
 # Iniciar o Painel Administrativo Web (porta 5174)
 npm run dev:admin
 
+# Iniciar o Portal da Editora / Criador do Jornal (porta 5175)
+npm run dev:publisher
+
 # Iniciar a Aplicação do Leitor (porta 5173)
 npm run dev:reader
 ```
@@ -81,7 +85,8 @@ npm run dev:reader
 ## 🌐 URLs dos Serviços em Execução
 
 * **Backend REST API:** `http://localhost:4000/api/v1`
-* **Painel Administrativo:** `http://localhost:5174/`
+* **Painel Administrativo:** `http://localhost:5174/admin/`
+* **Portal da Editora (Criador do Jornal):** `http://localhost:5175/editora/`
 * **Aplicação do Leitor:** `http://localhost:5173/`
 
 ---

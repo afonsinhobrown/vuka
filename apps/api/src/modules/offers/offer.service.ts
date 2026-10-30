@@ -86,9 +86,35 @@ export class OfferService {
       throw new AppError('O preço deve ser superior a zero.', 400, 'INVALID_PRICE');
     }
 
+    let publisherId = data.publisherId || null;
+
+    if (data.publicationId) {
+      const publication = await prisma.publication.findUnique({
+        where: { id: data.publicationId },
+        select: { publisherId: true }
+      });
+      if (!publication) throw new AppError('Publicação não encontrada.', 404, 'PUBLICATION_NOT_FOUND');
+      if (!publisherId) publisherId = publication.publisherId;
+      if (publisherId !== publication.publisherId) {
+        throw new AppError('A publicação indicada pertence a outra editora.', 403, 'FORBIDDEN');
+      }
+    }
+
+    if (data.editionId) {
+      const edition = await prisma.edition.findUnique({
+        where: { id: data.editionId },
+        include: { publication: { select: { publisherId: true } } }
+      });
+      if (!edition) throw new AppError('Edição não encontrada.', 404, 'EDITION_NOT_FOUND');
+      if (!publisherId) publisherId = edition.publication.publisherId;
+      if (publisherId !== edition.publication.publisherId) {
+        throw new AppError('A edição indicada pertence a outra editora.', 403, 'FORBIDDEN');
+      }
+    }
+
     const offer = await prisma.offer.create({
       data: {
-        publisherId: data.publisherId || null,
+        publisherId,
         publicationId: data.publicationId || null,
         editionId: data.editionId || null,
         type: data.type,
@@ -104,7 +130,7 @@ export class OfferService {
 
     await AuditService.record({
       actorUserId,
-      publisherId: data.publisherId,
+      publisherId,
       action: AuditEventAction.CREATE,
       entityType: 'OFFER',
       entityId: offer.id,
@@ -138,10 +164,16 @@ export class OfferService {
       validityDays?: number;
       status?: OfferStatus;
       reason?: string;
-    }
+    },
+    userPublisherId?: string | null,
+    isAdmin = false
   ) {
     const existing = await prisma.offer.findUnique({ where: { id } });
     if (!existing) throw new AppError('Oferta não encontrada.', 404, 'NOT_FOUND');
+
+    if (!isAdmin && existing.publisherId !== userPublisherId) {
+      throw new AppError('Acesso negado: esta oferta pertence a outra editora.', 403, 'FORBIDDEN');
+    }
 
     const isPriceChange =
       data.priceMinorUnits !== undefined && data.priceMinorUnits !== existing.priceMinorUnits;

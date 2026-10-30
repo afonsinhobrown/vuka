@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/editora/assets/(.*)",
+      "destination": "/assets/$1"
+    },
+    {
+      "source": "/editora",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/editora/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
